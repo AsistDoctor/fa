@@ -565,6 +565,8 @@ async function loadOBJModel(url) {
     const vertices = [];
     const normals = [];
     const faces = [];
+    let maxRawIndex = 0;
+    let hasZeroIndex = false;
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -590,9 +592,15 @@ async function loadOBJModel(url) {
         const faceIndices = [];
         for (const part of parts) {
           // Извлекаем индекс вершины (первое число до /)
-          const vertexIndex = parseInt(part.split("/")[0]) - 1; // OBJ индексы начинаются с 1
-          if (!isNaN(vertexIndex) && vertexIndex >= 0) {
-            faceIndices.push(vertexIndex);
+          const raw = parseInt(part.split("/")[0]);
+          if (!Number.isNaN(raw)) {
+            if (raw === 0) {
+              hasZeroIndex = true;
+            }
+            if (raw > maxRawIndex) {
+              maxRawIndex = raw;
+            }
+            faceIndices.push(raw);
           }
         }
         if (faceIndices.length >= 3) {
@@ -653,20 +661,36 @@ async function loadOBJModel(url) {
     // Выравниваем модель по полу + небольшой зазор (1-2% от размера плана)
     const offsetY = -minY * scale + PLAN_SIZE * 0.02;
 
+    const isZeroBased = hasZeroIndex || maxRawIndex === vertices.length - 1;
+
+    function resolveIndex(rawIndex) {
+      if (rawIndex === 0) {
+        return null;
+      }
+      if (rawIndex < 0) {
+        return vertices.length + rawIndex;
+      }
+      return isZeroBased ? rawIndex : rawIndex - 1;
+    }
+
+    let skippedTriangles = 0;
+
     // Создаем треугольники из граней
     for (const face of faces) {
       if (!face || face.length < 3) continue;
       
       // Разбиваем многоугольники на треугольники (fan triangulation)
       for (let i = 1; i < face.length - 1; i++) {
-        const idx0 = face[0];
-        const idx1 = face[i];
-        const idx2 = face[i + 1];
+        const idx0 = resolveIndex(face[0]);
+        const idx1 = resolveIndex(face[i]);
+        const idx2 = resolveIndex(face[i + 1]);
         
         // Проверяем валидность индексов
-        if (idx0 < 0 || idx0 >= vertices.length ||
+        if (idx0 === null || idx1 === null || idx2 === null ||
+            idx0 < 0 || idx0 >= vertices.length ||
             idx1 < 0 || idx1 >= vertices.length ||
             idx2 < 0 || idx2 >= vertices.length) {
+          skippedTriangles += 1;
           continue; // пропускаем некорректные треугольники
         }
         
@@ -729,6 +753,9 @@ async function loadOBJModel(url) {
       return false;
     }
 
+    if (skippedTriangles > 0) {
+      console.warn(`Пропущено треугольников: ${skippedTriangles}`);
+    }
     console.log(
       `Загружено ${vertices.length} вершин, ${normals.length} нормалей, ${faces.length} граней, ${triangleCount} треугольников`,
     );
