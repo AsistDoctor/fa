@@ -390,7 +390,10 @@ const uniforms = {
 
 // Можно зеркалить план по осям, если нужно совместить с геометрией
 const FLIP_PLAN_U = false; // отражение по горизонтали
-const FLIP_PLAN_V = true; // отражение по вертикали
+const FLIP_PLAN_V = false; // отражение по вертикали
+
+// Поворот модели на 180° вокруг оси Y (если "ушки" смотрят не туда)
+const ROTATE_MODEL_Y_180 = true;
 
 // Размер квадрата с планом (остаётся 220, но вынесен в константу для удобства)
 const PLAN_SIZE = 220;
@@ -400,8 +403,157 @@ addPlane(floorMesh, PLAN_SIZE, [0.6, 0.6, 0.6]);
 
 // ----- Загрузка модели из OBJ файла -----
 const buildingMesh = createMesh();
-const wallsMesh = createMesh(); // оставляем пустым
-const roomsMesh = createMesh(); // оставляем пустым
+const wallsMesh = createMesh();
+const roomsMesh = createMesh();
+
+// Если нужно вернуться к "рабочей" версии без OBJ, переключи на false
+const USE_OBJ_MODEL = true;
+
+function resetMesh(mesh) {
+  mesh.positions.length = 0;
+  mesh.normals.length = 0;
+  mesh.uvs.length = 0;
+  mesh.colors.length = 0;
+}
+
+function buildPlanMock() {
+  resetMesh(buildingMesh);
+  resetMesh(wallsMesh);
+  resetMesh(roomsMesh);
+
+  const contourHeight = 0.3;
+  const bottomWidth = PLAN_SIZE * 0.90;
+  const bottomDepth = PLAN_SIZE * 0.20;
+  const bottomZ = -PLAN_SIZE * 0.20;
+
+  // Контур: нижняя длинная часть
+  addBox(
+    buildingMesh,
+    0,
+    contourHeight / 2,
+    bottomZ,
+    bottomWidth,
+    contourHeight,
+    bottomDepth,
+    [0.5, 0.5, 0.5],
+  );
+
+  // Левый блок
+  const leftBlockWidth = PLAN_SIZE * 0.32;
+  const leftBlockDepth = PLAN_SIZE * 0.24;
+  addBox(
+    buildingMesh,
+    -bottomWidth / 2 + leftBlockWidth / 2,
+    contourHeight / 2,
+    bottomZ + (bottomDepth - leftBlockDepth) / 2,
+    leftBlockWidth,
+    contourHeight,
+    leftBlockDepth,
+    [0.5, 0.5, 0.5],
+  );
+
+  // Правый блок
+  const rightBlockWidth = PLAN_SIZE * 0.30;
+  const rightBlockDepth = PLAN_SIZE * 0.26;
+  addBox(
+    buildingMesh,
+    bottomWidth / 2 - rightBlockWidth / 2,
+    contourHeight / 2,
+    bottomZ + (bottomDepth - rightBlockDepth) / 2,
+    rightBlockWidth,
+    contourHeight,
+    rightBlockDepth,
+    [0.5, 0.5, 0.5],
+  );
+
+  // Крылья
+  const wingWidth = PLAN_SIZE * 0.20;
+  const wingDepth = PLAN_SIZE * 0.70;
+  const wingsZ = bottomZ + bottomDepth / 2 + wingDepth / 2;
+  const wingsOffsetX = PLAN_SIZE * 0.32;
+
+  addBox(
+    buildingMesh,
+    -wingsOffsetX,
+    contourHeight / 2,
+    wingsZ,
+    wingWidth,
+    contourHeight,
+    wingDepth,
+    [0.5, 0.5, 0.5],
+  );
+
+  addBox(
+    buildingMesh,
+    wingsOffsetX,
+    contourHeight / 2,
+    wingsZ,
+    wingWidth,
+    contourHeight,
+    wingDepth,
+    [0.5, 0.5, 0.5],
+  );
+
+  // Стены
+  const wallThickness = 0.15;
+  const wallHeight = 2.0;
+
+  function addWall(x, z, width, depth, isVertical) {
+    const w = isVertical ? wallThickness : width;
+    const d = isVertical ? depth : wallThickness;
+    addBox(wallsMesh, x, wallHeight / 2, z, w, wallHeight, d, [0.05, 0.05, 0.05]);
+  }
+
+  addWall(0, bottomZ, bottomWidth * 0.85, wallThickness, false);
+  addWall(-wingsOffsetX, wingsZ, wallThickness, wingDepth * 0.8, true);
+  addWall(wingsOffsetX, wingsZ, wallThickness, wingDepth * 0.8, true);
+
+  const numCrossWalls = 8;
+  for (let i = 0; i < numCrossWalls; i++) {
+    const x = -bottomWidth / 2 + (bottomWidth / (numCrossWalls + 1)) * (i + 1);
+    addWall(x, bottomZ, wallThickness, bottomDepth * 0.6, true);
+  }
+
+  const numWingWalls = 6;
+  for (let i = 0; i < numWingWalls; i++) {
+    const z = bottomZ + bottomDepth / 2 + (wingDepth / (numWingWalls + 1)) * (i + 1);
+    addWall(-wingsOffsetX, z, wingWidth * 0.7, wallThickness, false);
+    addWall(wingsOffsetX, z, wingWidth * 0.7, wallThickness, false);
+  }
+
+  const roomHeight = 0.1;
+  const roomColor = [0.7, 0.75, 0.8];
+
+  function addRoom(x, z, width, depth) {
+    addBox(roomsMesh, x, contourHeight + roomHeight / 2, z, width, roomHeight, depth, roomColor);
+  }
+
+  const roomSpacing = bottomWidth / (numCrossWalls + 1);
+  const roomWidth = roomSpacing * 0.85;
+  const roomDepth = bottomDepth * 0.35;
+
+  for (let i = 0; i < numCrossWalls + 1; i++) {
+    const x = -bottomWidth / 2 + roomSpacing * (i + 0.5);
+    addRoom(x, bottomZ - bottomDepth * 0.25, roomWidth, roomDepth);
+    addRoom(x, bottomZ + bottomDepth * 0.25, roomWidth, roomDepth);
+  }
+
+  const wingRoomSpacing = wingDepth / (numWingWalls + 1);
+  const wingRoomWidth = wingWidth * 0.35;
+  const wingRoomDepth = wingRoomSpacing * 0.85;
+
+  for (let i = 0; i < numWingWalls + 1; i++) {
+    const z = bottomZ + bottomDepth / 2 + wingRoomSpacing * (i + 0.5);
+    addRoom(-wingsOffsetX - wingWidth * 0.25, z, wingRoomWidth, wingRoomDepth);
+    addRoom(-wingsOffsetX + wingWidth * 0.25, z, wingRoomWidth, wingRoomDepth);
+  }
+
+  for (let i = 0; i < numWingWalls + 1; i++) {
+    const z = bottomZ + bottomDepth / 2 + wingRoomSpacing * (i + 0.5);
+    addRoom(wingsOffsetX - wingWidth * 0.25, z, wingRoomWidth, wingRoomDepth);
+    addRoom(wingsOffsetX + wingWidth * 0.25, z, wingRoomWidth, wingRoomDepth);
+  }
+}
 
 // Функция для парсинга OBJ файла с улучшенной обработкой граней
 async function loadOBJModel(url) {
@@ -449,6 +601,13 @@ async function loadOBJModel(url) {
       }
     }
 
+    // Проверяем, что есть вершины
+    if (vertices.length === 0) {
+      console.error("OBJ файл не содержит вершин");
+      showError("OBJ файл не содержит вершин.");
+      return false;
+    }
+
     // Вычисляем границы модели для центрирования и масштабирования
     let minX = Infinity,
       maxX = -Infinity;
@@ -458,12 +617,19 @@ async function loadOBJModel(url) {
       maxZ = -Infinity;
 
     for (const v of vertices) {
+      if (!v || v.length < 3) continue;
       minX = Math.min(minX, v[0]);
       maxX = Math.max(maxX, v[0]);
       minY = Math.min(minY, v[1]);
       maxY = Math.max(maxY, v[1]);
       minZ = Math.min(minZ, v[2]);
       maxZ = Math.max(maxZ, v[2]);
+    }
+
+    if (minX === Infinity || maxX === -Infinity) {
+      console.error("Не удалось вычислить границы модели");
+      showError("Не удалось вычислить границы модели.");
+      return false;
     }
 
     const centerX = (minX + maxX) / 2;
@@ -475,19 +641,38 @@ async function loadOBJModel(url) {
     const modelDepth = maxZ - minZ;
     const modelHeight = maxY - minY;
     const maxDimension = Math.max(modelWidth, modelDepth);
+    
+    if (maxDimension === 0) {
+      console.error("Модель имеет нулевой размер");
+      showError("Модель имеет нулевой размер.");
+      return false;
+    }
+    
     const scale = (PLAN_SIZE * 0.9) / maxDimension; // немного меньше плана для запаса
 
-    // Выравниваем модель: Y -> вверх, X и Z -> горизонтальная плоскость
-    // Модель из Blender может быть повернута, поэтому выравниваем по плану
-    const offsetY = 0.2; // небольшой подъем над планом
+    // Выравниваем модель по полу + небольшой зазор (1-2% от размера плана)
+    const offsetY = -minY * scale + PLAN_SIZE * 0.02;
 
     // Создаем треугольники из граней
     for (const face of faces) {
+      if (!face || face.length < 3) continue;
+      
       // Разбиваем многоугольники на треугольники (fan triangulation)
       for (let i = 1; i < face.length - 1; i++) {
-        const v0 = vertices[face[0]];
-        const v1 = vertices[face[i]];
-        const v2 = vertices[face[i + 1]];
+        const idx0 = face[0];
+        const idx1 = face[i];
+        const idx2 = face[i + 1];
+        
+        // Проверяем валидность индексов
+        if (idx0 < 0 || idx0 >= vertices.length ||
+            idx1 < 0 || idx1 >= vertices.length ||
+            idx2 < 0 || idx2 >= vertices.length) {
+          continue; // пропускаем некорректные треугольники
+        }
+        
+        const v0 = vertices[idx0];
+        const v1 = vertices[idx1];
+        const v2 = vertices[idx2];
 
         // Применяем трансформации: центрируем, масштабируем, выравниваем
         const x0 = (v0[0] - centerX) * scale;
@@ -513,7 +698,10 @@ async function loadOBJModel(url) {
         const nx = dy1 * dz2 - dz1 * dy2;
         const ny = dz1 * dx2 - dx1 * dz2;
         const nz = dx1 * dy2 - dy1 * dx2;
-        const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (!len || len < 1e-8) {
+          continue; // вырожденный треугольник, пропускаем
+        }
         const normalX = nx / len;
         const normalY = ny / len;
         const normalZ = nz / len;
@@ -533,8 +721,16 @@ async function loadOBJModel(url) {
       }
     }
 
+    // Проверяем, что созданы треугольники
+    const triangleCount = buildingMesh.positions.length / 3;
+    if (triangleCount === 0) {
+      console.error("Не удалось создать треугольники из граней");
+      showError("Не удалось создать треугольники из граней.");
+      return false;
+    }
+
     console.log(
-      `Загружено ${vertices.length} вершин, ${normals.length} нормалей, ${faces.length} граней`,
+      `Загружено ${vertices.length} вершин, ${normals.length} нормалей, ${faces.length} граней, ${triangleCount} треугольников`,
     );
     return true;
   } catch (error) {
@@ -575,28 +771,35 @@ function uploadMesh(mesh) {
   };
 }
 
+// Строим макет, если OBJ отключен
+if (!USE_OBJ_MODEL) {
+  buildPlanMock();
+}
+
 const floorGPU = uploadMesh(floorMesh);
 // buildingGPU будет создан после загрузки OBJ
 let buildingGPU = uploadMesh(buildingMesh); // временно пустой
 const wallsGPU = uploadMesh(wallsMesh);
 const roomsGPU = uploadMesh(roomsMesh);
 
+let showPlan = true;
+
 // Загружаем модель из OBJ файла и обновляем buildingGPU
-loadOBJModel("1к здание (2).obj").then((success) => {
-  if (success) {
-    modelLoaded = true;
-    // Удаляем старые буферы
-    if (buildingGPU.buffers) {
-      buildingGPU.buffers.forEach((buf) => gl.deleteBuffer(buf));
+if (USE_OBJ_MODEL) {
+  loadOBJModel("building_model (3).obj").then((success) => {
+    if (success) {
+      modelLoaded = true;
+      if (buildingGPU.buffers) {
+        buildingGPU.buffers.forEach((buf) => gl.deleteBuffer(buf));
+      }
+      const newBuildingGPU = uploadMesh(buildingMesh);
+      buildingGPU.vao = newBuildingGPU.vao;
+      buildingGPU.count = newBuildingGPU.count;
+      buildingGPU.buffers = newBuildingGPU.buffers;
+      console.log("Модель загружена и готова к отображению");
     }
-    // Создаем новые буферы с загруженной геометрией
-    const newBuildingGPU = uploadMesh(buildingMesh);
-    buildingGPU.vao = newBuildingGPU.vao;
-    buildingGPU.count = newBuildingGPU.count;
-    buildingGPU.buffers = newBuildingGPU.buffers;
-    console.log("Модель загружена и готова к отображению");
-  }
-});
+  });
+}
 
 const texture = gl.createTexture();
 let textureLoaded = false;
@@ -728,7 +931,7 @@ function drawMesh(mesh, useTexture) {
 }
 
 function render() {
-  gl.clearColor(0.05, 0.08, 0.12, 1);
+  gl.clearColor(0.88, 0.88, 0.88, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
@@ -753,7 +956,9 @@ function render() {
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.uniform1i(uniforms.tex, 0);
 
-  drawMesh(floorGPU, textureLoaded);
+  if (showPlan) {
+    drawMesh(floorGPU, textureLoaded);
+  }
   drawMesh(buildingGPU, false);
   drawMesh(wallsGPU, false);
   drawMesh(roomsGPU, false);
@@ -804,6 +1009,14 @@ function exportToOBJ() {
 const exportBtn = document.getElementById("exportBtn");
 if (exportBtn) {
   exportBtn.addEventListener("click", exportToOBJ);
+}
+
+const togglePlanBtn = document.getElementById("togglePlanBtn");
+if (togglePlanBtn) {
+  togglePlanBtn.addEventListener("click", () => {
+    showPlan = !showPlan;
+    togglePlanBtn.textContent = showPlan ? "Hide Plan" : "Show Plan";
+  });
 }
 
 render();
