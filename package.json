@@ -1,0 +1,11 @@
+{
+  "name": "fa-main",
+  "private": true,
+  "scripts": {
+    "start": "serve fa-main -l 3000",
+    "serve": "serve fa-main -l 3000"
+  },
+  "devDependencies": {
+    "serve": "^14.2.0"
+  }
+}

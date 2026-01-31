@@ -1,0 +1,79 @@
+{
+  "model1": {
+    "offset": {
+      "x": 1650,
+      "y": 0,
+      "z": -539
+    },
+    "rotation": {
+      "yaw": 0
+    },
+    "file": "models/11111.obj"
+  },
+  "model2": {
+    "offset": {
+      "x": -308,
+      "y": 0,
+      "z": -352
+    },
+    "rotation": {
+      "yaw": 3.141592653589791
+    },
+    "file": "models/2к 3D.obj"
+  },
+  "model3": {
+    "offset": {
+      "x": -1386,
+      "y": 0,
+      "z": -341
+    },
+    "rotation": {
+      "yaw": 0
+    },
+    "file": "models/3к 3D.obj"
+  },
+  "model4": {
+    "offset": {
+      "x": 1749,
+      "y": 0,
+      "z": -1243
+    },
+    "rotation": {
+      "yaw": 0
+    },
+    "file": "models/4к 3D.obj"
+  },
+  "model5": {
+    "offset": {
+      "x": 550,
+      "y": 0,
+      "z": -1287
+    },
+    "rotation": {
+      "yaw": -1.570796326794896
+    },
+    "file": "models/5к.obj"
+  },
+  "model6": {
+    "offset": {
+      "x": -4224,
+      "y": 0,
+      "z": -1529
+    },
+    "rotation": {
+      "yaw": 1.570796326794896
+    },
+    "file": "models/6к.obj"
+  },
+  "model7": {
+    "offset": {
+      "x": -2541,
+      "y": 0,
+      "z": -4235
+    },
+    "rotation": {
+      "yaw": 0
+    },
+    "file": "models/7к.obj"
+  }
+}
