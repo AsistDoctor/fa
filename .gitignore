@@ -43,3 +43,10 @@ logs/
 
 # Cursor
 .cursor/
+
+# Git auth scripts with tokens (не коммитить!)
+auto-push.bat
+setup-git-auth.bat
+setup-git-auth.sh
+*git-auth*
+*auto-push*
