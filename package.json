@@ -1,9 +1,13 @@
 {
   "name": "fa-main",
   "private": true,
+  "type": "module",
   "scripts": {
-    "start": "serve fa-main -l 3000",
-    "serve": "serve fa-main -l 3000"
+    "start": "serve . -l 3000",
+    "serve": "serve . -l 3000"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
   },
   "devDependencies": {
     "serve": "^14.2.0"

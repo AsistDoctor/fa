@@ -3,21 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Floor Plan 3D (WebGL)</title>
+    <title>Floor Plan 3D (Three.js)</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div id="app">
       <canvas id="c" tabindex="0"></canvas>
       <div class="hud">
-        <div class="title">3D Model</div>
-        <div class="hint">Drag to orbit • Scroll to zoom • Arrows/WASD to fly • Space/Shift to move up/down • 1-8 select model • Q/E rotate model</div>
+        <div class="title">3D Model (Three.js)</div>
+        <div class="hint">Drag to orbit • Scroll to zoom • Arrows/WASD to fly • Space/Shift to move up/down • 1-7 select model • Q/E rotate model</div>
         <button id="togglePlanBtn" class="export-btn">Hide Plan</button>
         <button id="exportBtn" class="export-btn">Export to OBJ</button>
         <button id="positionModeBtn" class="export-btn">Position Mode: Off</button>
         <button id="exportPositionsBtn" class="export-btn">Export Positions</button>
       </div>
     </div>
-    <script type="module" src="main.js"></script>
+    <script type="module" src="main-threejs.js"></script>
   </body>
 </html>

@@ -361,6 +361,25 @@ function addPlane(mesh, size, color, y = 0) {
   }
 }
 
+function addGrid(mesh, size, gridSize, color, y = 0, lineWidth = 0.05) {
+  // gridSize - размер одной ячейки сетки
+  // size - общий размер сетки
+  const halfSize = size / 2;
+  const lineHeight = y + lineWidth * 0.1; // Немного выше пола для видимости
+  
+  // Вертикальные линии (параллельны оси Z, идут вдоль оси X)
+  for (let x = -halfSize; x <= halfSize + 0.1; x += gridSize) {
+    // Тонкая линия как узкий прямоугольник, вытянутый вдоль Z
+    addBox(mesh, x, lineHeight, 0, lineWidth, lineWidth * 2, size, color);
+  }
+  
+  // Горизонтальные линии (параллельны оси X, идут вдоль оси Z)
+  for (let z = -halfSize; z <= halfSize + 0.1; z += gridSize) {
+    // Тонкая линия как узкий прямоугольник, вытянутый вдоль X
+    addBox(mesh, 0, lineHeight, z, size, lineWidth * 2, lineWidth, color);
+  }
+}
+
 function createMesh() {
   return { positions: [], normals: [], uvs: [], colors: [] };
 }
@@ -395,8 +414,8 @@ const FLIP_PLAN_V = false; // отражение по вертикали
 // Поворот модели на 180° вокруг оси Y (если "ушки" смотрят не туда)
 const ROTATE_MODEL_Y_180 = true;
 
-// Размер квадрата с планом (остаётся 220, но вынесен в константу для удобства)
-const PLAN_SIZE = 220;
+// Размер квадрата с планом (увеличен в 5 раз)
+const PLAN_SIZE = 220 * 5; // 1100
 const PLAN_TEXTURE_SIZE = PLAN_SIZE * 1.35;
 const PLAN_Y = -PLAN_SIZE * 0.03;
 const POSITION_STEP = PLAN_SIZE * 0.01;
@@ -405,25 +424,57 @@ const ROTATION_STEP = Math.PI / 36;
 const floorMesh = createMesh();
 addPlane(floorMesh, PLAN_TEXTURE_SIZE, [0.6, 0.6, 0.6], PLAN_Y);
 
+// Создаем сетку на полу для ориентации в размерах
+const gridMesh = createMesh();
+const GRID_CELL_SIZE = 20 * 5; // Размер одной ячейки сетки (увеличен пропорционально полу)
+const GRID_COLOR = [0.35, 0.35, 0.4]; // Темно-серый цвет для сетки (немного темнее для контраста)
+addGrid(gridMesh, PLAN_TEXTURE_SIZE, GRID_CELL_SIZE, GRID_COLOR, PLAN_Y, 0.1);
+
 // ----- Загрузка модели из OBJ файла -----
-const buildingMesh = createMesh();
-const buildingMesh2 = createMesh();
-const modelOffsets = {
-  model1: { x: 0, y: 0, z: 0 },
-  model2: { x: -PLAN_SIZE * 0.96, y: 0, z: 0 },
-};
-const modelRotations = {
-  model1: { yaw: 0 },
-  model2: { yaw: 0 },
-};
-const modelBasePositions = {
-  model1: null,
-  model2: null,
-};
-const modelBaseCenters = {
-  model1: null,
-  model2: null,
-};
+const buildingMeshes = [
+  createMesh(), // model1
+  createMesh(), // model2
+  createMesh(), // model3
+  createMesh(), // model4
+  createMesh(), // model5
+  createMesh(), // model6
+  createMesh(), // model7
+  createMesh(), // model8
+];
+
+// Для обратной совместимости
+const buildingMesh = buildingMeshes[0];
+const buildingMesh2 = buildingMeshes[1];
+
+// Список файлов моделей
+const modelFiles = [
+  "models/11111.obj",                    // model1
+  "models/2к 3D.obj",                    // model2 (заменена на модель 3)
+  "models/3к 3D.obj",                   // model3 (было model4)
+  "models/4к 3D.obj",                   // model4 (было model5)
+  "models/5к.obj",                      // model5 (было model6)
+  "models/6к.obj",                      // model6 (было model7)
+  "models/7к.obj",                      // model7 (было model8)
+];
+
+const modelOffsets = {};
+const modelRotations = {};
+const modelBasePositions = {};
+const modelBaseCenters = {};
+const modelHeights = {}; // Высоты моделей для нормализации
+
+// Инициализация позиций и поворотов для всех моделей
+for (let i = 0; i < buildingMeshes.length; i++) {
+  const modelKey = `model${i + 1}`;
+  modelOffsets[modelKey] = { 
+    x: (i % 3) * PLAN_SIZE * 0.5 - PLAN_SIZE * 0.5, 
+    y: 0, 
+    z: Math.floor(i / 3) * PLAN_SIZE * 0.5 - PLAN_SIZE * 0.25 
+  };
+  modelRotations[modelKey] = { yaw: 0 };
+  modelBasePositions[modelKey] = null;
+  modelBaseCenters[modelKey] = null;
+}
 const wallsMesh = createMesh();
 const roomsMesh = createMesh();
 
@@ -470,6 +521,82 @@ function computeMeshCenter(positions) {
   ];
 }
 
+function computeMeshHeight(positions) {
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 1; i < positions.length; i += 3) {
+    const y = positions[i];
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  return maxY - minY;
+}
+
+// Функция для нормализации высоты всех моделей до максимальной
+function normalizeModelHeights() {
+  // Находим максимальную высоту среди всех моделей
+  let maxHeight = 0;
+  for (const modelKey in modelHeights) {
+    if (modelHeights[modelKey] > maxHeight) {
+      maxHeight = modelHeights[modelKey];
+    }
+  }
+  
+  if (maxHeight === 0) {
+    console.warn("Не найдено моделей с валидной высотой");
+    return;
+  }
+  
+  console.log(`Нормализация высоты моделей до ${maxHeight.toFixed(2)} единиц`);
+  
+  // Масштабируем все модели по оси Y до максимальной высоты
+  for (let i = 0; i < buildingMeshes.length; i++) {
+    const modelKey = `model${i + 1}`;
+    const base = modelBasePositions[modelKey];
+    const center = modelBaseCenters[modelKey];
+    
+    if (!base || !center || !modelHeights[modelKey]) continue;
+    
+    const currentHeight = modelHeights[modelKey];
+    if (currentHeight === 0) continue;
+    
+    const scaleY = maxHeight / currentHeight;
+    
+    // Применяем масштабирование только по оси Y
+    const scaledPositions = new Array(base.length);
+    for (let j = 0; j < base.length; j += 3) {
+      const x = base[j];
+      const y = base[j + 1];
+      const z = base[j + 2];
+      
+      // Масштабируем относительно центра модели
+      scaledPositions[j] = x;
+      scaledPositions[j + 1] = center[1] + (y - center[1]) * scaleY;
+      scaledPositions[j + 2] = z;
+    }
+    
+    // Обновляем базовые позиции
+    modelBasePositions[modelKey] = scaledPositions;
+    modelBaseCenters[modelKey] = computeMeshCenter(scaledPositions);
+    modelHeights[modelKey] = maxHeight; // Обновляем высоту до нормализованной
+    
+    // Применяем трансформацию
+    const mesh = buildingMeshes[i];
+    applyTransformFromBase(
+      mesh,
+      modelBasePositions[modelKey],
+      modelBaseCenters[modelKey],
+      modelOffsets[modelKey],
+      modelRotations[modelKey],
+    );
+    
+    // Обновляем GPU буфер
+    buildingGPUs[i] = refreshMeshGPU(mesh, buildingGPUs[i]);
+  }
+  
+  console.log(`Высота всех моделей нормализована до ${maxHeight.toFixed(2)} единиц`);
+}
+
 function applyTransformFromBase(mesh, basePositions, center, offset, rotation) {
   if (!basePositions || !center) return;
   const cosY = Math.cos(rotation.yaw);
@@ -503,38 +630,38 @@ function refreshMeshGPU(mesh, gpu) {
 }
 
 function nudgeActiveModel(dx, dy, dz) {
-  const isFirst = activeModel === 1;
-  const mesh = isFirst ? buildingMesh : buildingMesh2;
-  const base = isFirst ? modelBasePositions.model1 : modelBasePositions.model2;
-  const center = isFirst ? modelBaseCenters.model1 : modelBaseCenters.model2;
-  const offset = isFirst ? modelOffsets.model1 : modelOffsets.model2;
-  const rotation = isFirst ? modelRotations.model1 : modelRotations.model2;
+  if (activeModel < 1 || activeModel > buildingMeshes.length) return;
+  const meshIndex = activeModel - 1;
+  const mesh = buildingMeshes[meshIndex];
+  const modelKey = `model${activeModel}`;
+  const base = modelBasePositions[modelKey];
+  const center = modelBaseCenters[modelKey];
+  const offset = modelOffsets[modelKey];
+  const rotation = modelRotations[modelKey];
   if (!base) return;
   offset.x += dx;
   offset.y += dy;
   offset.z += dz;
   applyTransformFromBase(mesh, base, center, offset, rotation);
-  if (isFirst) {
-    buildingGPU = refreshMeshGPU(mesh, buildingGPU);
-  } else {
-    buildingGPU2 = refreshMeshGPU(mesh, buildingGPU2);
+  if (buildingGPUs[meshIndex]) {
+    buildingGPUs[meshIndex] = refreshMeshGPU(mesh, buildingGPUs[meshIndex]);
   }
 }
 
 function rotateActiveModel(deltaYaw) {
-  const isFirst = activeModel === 1;
-  const mesh = isFirst ? buildingMesh : buildingMesh2;
-  const base = isFirst ? modelBasePositions.model1 : modelBasePositions.model2;
-  const center = isFirst ? modelBaseCenters.model1 : modelBaseCenters.model2;
-  const offset = isFirst ? modelOffsets.model1 : modelOffsets.model2;
-  const rotation = isFirst ? modelRotations.model1 : modelRotations.model2;
+  if (activeModel < 1 || activeModel > buildingMeshes.length) return;
+  const meshIndex = activeModel - 1;
+  const mesh = buildingMeshes[meshIndex];
+  const modelKey = `model${activeModel}`;
+  const base = modelBasePositions[modelKey];
+  const center = modelBaseCenters[modelKey];
+  const offset = modelOffsets[modelKey];
+  const rotation = modelRotations[modelKey];
   if (!base) return;
   rotation.yaw += deltaYaw;
   applyTransformFromBase(mesh, base, center, offset, rotation);
-  if (isFirst) {
-    buildingGPU = refreshMeshGPU(mesh, buildingGPU);
-  } else {
-    buildingGPU2 = refreshMeshGPU(mesh, buildingGPU2);
+  if (buildingGPUs[meshIndex]) {
+    buildingGPUs[meshIndex] = refreshMeshGPU(mesh, buildingGPUs[meshIndex]);
   }
 }
 
@@ -938,9 +1065,12 @@ if (!USE_OBJ_MODEL) {
 }
 
 const floorGPU = uploadMesh(floorMesh);
-// buildingGPU будет создан после загрузки OBJ
-let buildingGPU = uploadMesh(buildingMesh); // временно пустой
-let buildingGPU2 = null;
+const gridGPU = uploadMesh(gridMesh);
+// Массив GPU буферов для всех моделей
+const buildingGPUs = buildingMeshes.map(mesh => uploadMesh(mesh)); // временно пустые
+// Для обратной совместимости
+let buildingGPU = buildingGPUs[0];
+let buildingGPU2 = buildingGPUs[1];
 const wallsGPU = uploadMesh(wallsMesh);
 const roomsGPU = uploadMesh(roomsMesh);
 
@@ -952,38 +1082,90 @@ let exportPositionsBtn = null;
 
 // Загружаем модели из OBJ файлов и обновляем GPU
 if (USE_OBJ_MODEL) {
-  loadOBJModel("models/11111.obj", buildingMesh).then((success) => {
-    if (success) {
-      modelLoaded = true;
-      modelBasePositions.model1 = buildingMesh.positions.slice();
-      modelBaseCenters.model1 = computeMeshCenter(modelBasePositions.model1);
-      applyTransformFromBase(
-        buildingMesh,
-        modelBasePositions.model1,
-        modelBaseCenters.model1,
-        modelOffsets.model1,
-        modelRotations.model1,
-      );
-      buildingGPU = refreshMeshGPU(buildingMesh, buildingGPU);
-      console.log("Первая модель загружена и готова к отображению");
-    }
-  });
+  // Загружаем все модели из массива modelFiles
+  for (let i = 0; i < Math.min(modelFiles.length, buildingMeshes.length); i++) {
+    const modelIndex = i;
+    const modelKey = `model${modelIndex + 1}`;
+    const mesh = buildingMeshes[modelIndex];
+    const file = modelFiles[modelIndex];
+    
+    loadOBJModel(file, mesh).then((success) => {
+      if (success) {
+        modelLoaded = true;
+        modelBasePositions[modelKey] = mesh.positions.slice();
+        modelBaseCenters[modelKey] = computeMeshCenter(modelBasePositions[modelKey]);
+        modelHeights[modelKey] = computeMeshHeight(modelBasePositions[modelKey]);
+        applyTransformFromBase(
+          mesh,
+          modelBasePositions[modelKey],
+          modelBaseCenters[modelKey],
+          modelOffsets[modelKey],
+          modelRotations[modelKey],
+        );
+        buildingGPUs[modelIndex] = refreshMeshGPU(mesh, buildingGPUs[modelIndex]);
+        console.log(`Модель ${modelIndex + 1} (${file}) загружена, высота: ${modelHeights[modelKey].toFixed(2)}`);
+      } else {
+        console.warn(`Не удалось загрузить модель ${modelIndex + 1}: ${file}`);
+      }
+    }).catch((error) => {
+      console.error(`Ошибка загрузки модели ${modelIndex + 1} (${file}):`, error);
+    });
+  }
+  
+  // Загружаем позиции из JSON файла и нормализуем высоты после загрузки всех моделей (с задержкой)
+  setTimeout(() => {
+    loadModelPositions();
+    // Нормализуем высоты всех моделей до максимальной
+    normalizeModelHeights();
+  }, 3000); // Даём время моделям загрузиться
+}
 
-  loadOBJModel("models/2к 3D.blend (copy).obj", buildingMesh2).then((success) => {
-    if (success) {
-      modelBasePositions.model2 = buildingMesh2.positions.slice();
-      modelBaseCenters.model2 = computeMeshCenter(modelBasePositions.model2);
-      applyTransformFromBase(
-        buildingMesh2,
-        modelBasePositions.model2,
-        modelBaseCenters.model2,
-        modelOffsets.model2,
-        modelRotations.model2,
-      );
-      buildingGPU2 = refreshMeshGPU(buildingMesh2, buildingGPU2);
-      console.log("Вторая модель загружена и готова к отображению");
+// Функция загрузки позиций моделей из JSON файла
+async function loadModelPositions() {
+  try {
+    const response = await fetch("model_positions.json");
+    if (!response.ok) {
+      console.log("Файл model_positions.json не найден, используются позиции по умолчанию");
+      return;
     }
-  });
+    const positions = await response.json();
+    
+    // Применяем позиции ко всем моделям
+    for (const modelKey in positions) {
+      if (positions[modelKey] && modelOffsets[modelKey] && modelRotations[modelKey]) {
+        const pos = positions[modelKey];
+        if (pos.offset) {
+          modelOffsets[modelKey].x = pos.offset.x || modelOffsets[modelKey].x;
+          modelOffsets[modelKey].y = pos.offset.y || modelOffsets[modelKey].y;
+          modelOffsets[modelKey].z = pos.offset.z || modelOffsets[modelKey].z;
+        }
+        if (pos.rotation) {
+          modelRotations[modelKey].yaw = pos.rotation.yaw || modelRotations[modelKey].yaw;
+        }
+        
+        // Применяем трансформацию к модели
+        const modelIndex = parseInt(modelKey.replace("model", "")) - 1;
+        if (modelIndex >= 0 && modelIndex < buildingMeshes.length) {
+          const mesh = buildingMeshes[modelIndex];
+          const base = modelBasePositions[modelKey];
+          const center = modelBaseCenters[modelKey];
+          if (base && center) {
+            applyTransformFromBase(
+              mesh,
+              base,
+              center,
+              modelOffsets[modelKey],
+              modelRotations[modelKey],
+            );
+            buildingGPUs[modelIndex] = refreshMeshGPU(mesh, buildingGPUs[modelIndex]);
+          }
+        }
+      }
+    }
+    console.log("Позиции моделей загружены из model_positions.json");
+  } catch (error) {
+    console.warn("Не удалось загрузить позиции из model_positions.json:", error);
+  }
 }
 
 const texture = gl.createTexture();
@@ -1001,7 +1183,42 @@ let isDragging = false;
 let lastX = 0;
 let lastY = 0;
 
+// Отслеживание нажатых клавиш для плавного движения камеры
+const keys = {
+  ArrowUp: false,
+  ArrowDown: false,
+  ArrowLeft: false,
+  ArrowRight: false,
+  w: false,
+  W: false,
+  s: false,
+  S: false,
+  a: false,
+  A: false,
+  d: false,
+  D: false,
+  Space: false,
+  Shift: false,
+  PageUp: false,
+  PageDown: false,
+  q: false,
+  Q: false,
+  e: false,
+  E: false,
+};
+
+// Устанавливаем фокус на canvas при клике и при загрузке
+canvas.addEventListener("click", () => {
+  canvas.focus();
+});
+
+// Устанавливаем фокус при загрузке страницы
+window.addEventListener("load", () => {
+  canvas.focus();
+});
+
 canvas.addEventListener("mousedown", (event) => {
+  canvas.focus(); // Убеждаемся, что canvas имеет фокус
   isDragging = true;
   lastX = event.clientX;
   lastY = event.clientY;
@@ -1019,86 +1236,235 @@ window.addEventListener("mousemove", (event) => {
   camera.pitch += dy * 0.005; // инвертируем, чтобы движение мыши было интуитивным
   // мягкие ограничения: камера всегда остаётся над полом
   const minPitch = 0.2; // почти горизонтально
-  const maxPitch = 1.5; // почти вертикально сверху
+  const maxPitch = 2.2; // увеличен максимальный угол для более высокого полёта
   if (camera.pitch < minPitch) camera.pitch = minPitch;
   if (camera.pitch > maxPitch) camera.pitch = maxPitch;
 });
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
   camera.distance += event.deltaY * 0.2;
-  camera.distance = Math.max(60, Math.min(320, camera.distance));
+  camera.distance = Math.max(60, Math.min(2000, camera.distance)); // увеличена максимальная дальность
 });
 
-// Быстрый "рестарт камеры" по клавише R, если уехал в космос
+// Обработка нажатий клавиш
 window.addEventListener("keydown", (event) => {
   if (event.key === "r" || event.key === "R") {
     camera.target = [0, 2, -10];
     camera.distance = 240;
     camera.yaw = Math.PI / 4;
     camera.pitch = 0.9;
+    return;
   }
 
-  if (event.key === "1") {
-    activeModel = 1;
-    updatePositionModeLabel();
-  } else if (event.key === "2") {
-    activeModel = 2;
-    updatePositionModeLabel();
-  }
-
-  if (positionMode) {
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      nudgeActiveModel(0, 0, -POSITION_STEP);
-    } else if (event.key === "ArrowDown") {
-      event.preventDefault();
-      nudgeActiveModel(0, 0, POSITION_STEP);
-    } else if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      nudgeActiveModel(-POSITION_STEP, 0, 0);
-    } else if (event.key === "ArrowRight") {
-      event.preventDefault();
-      nudgeActiveModel(POSITION_STEP, 0, 0);
-    } else if (event.key === "q" || event.key === "Q") {
-      event.preventDefault();
-      rotateActiveModel(-ROTATION_STEP);
-    } else if (event.key === "e" || event.key === "E") {
-      event.preventDefault();
-      rotateActiveModel(ROTATION_STEP);
-    } else if (event.key === "PageUp") {
-      event.preventDefault();
-      nudgeActiveModel(0, POSITION_STEP, 0);
-    } else if (event.key === "PageDown") {
-      event.preventDefault();
-      nudgeActiveModel(0, -POSITION_STEP, 0);
+  // Переключение между моделями (1-8)
+  if (event.key >= "1" && event.key <= "8") {
+    const modelNum = parseInt(event.key);
+    if (modelNum >= 1 && modelNum <= buildingMeshes.length) {
+      activeModel = modelNum;
+      updatePositionModeLabel();
     }
     return;
   }
 
-  const step = 4;
-  const forwardX = -Math.sin(camera.yaw);
-  const forwardZ = -Math.cos(camera.yaw);
-  const leftX = -Math.cos(camera.yaw);
-  const leftZ = Math.sin(camera.yaw);
+  // В режиме позиционирования модели
+  if (positionMode) {
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      nudgeActiveModel(0, 0, -POSITION_STEP);
+      return;
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      nudgeActiveModel(0, 0, POSITION_STEP);
+      return;
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      nudgeActiveModel(-POSITION_STEP, 0, 0);
+      return;
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      nudgeActiveModel(POSITION_STEP, 0, 0);
+      return;
+    } else if (event.key === "q" || event.key === "Q") {
+      event.preventDefault();
+      rotateActiveModel(-ROTATION_STEP);
+      return;
+    } else if (event.key === "e" || event.key === "E") {
+      event.preventDefault();
+      rotateActiveModel(ROTATION_STEP);
+      return;
+    } else if (event.key === "PageUp") {
+      event.preventDefault();
+      nudgeActiveModel(0, POSITION_STEP, 0);
+      return;
+    } else if (event.key === "PageDown") {
+      event.preventDefault();
+      nudgeActiveModel(0, -POSITION_STEP, 0);
+      return;
+    }
+  }
 
+  // Управление камерой (когда не в режиме позиционирования)
   if (event.key === "ArrowUp") {
     event.preventDefault();
-    camera.target[0] += forwardX * step;
-    camera.target[2] += forwardZ * step;
+    keys.ArrowUp = true;
   } else if (event.key === "ArrowDown") {
     event.preventDefault();
-    camera.target[0] -= forwardX * step;
-    camera.target[2] -= forwardZ * step;
+    keys.ArrowDown = true;
   } else if (event.key === "ArrowLeft") {
     event.preventDefault();
-    camera.target[0] += leftX * step;
-    camera.target[2] += leftZ * step;
+    keys.ArrowLeft = true;
   } else if (event.key === "ArrowRight") {
     event.preventDefault();
-    camera.target[0] -= leftX * step;
-    camera.target[2] -= leftZ * step;
+    keys.ArrowRight = true;
+  } else if (event.key === "w" || event.key === "W") {
+    event.preventDefault();
+    keys.w = true;
+    keys.W = true;
+  } else if (event.key === "s" || event.key === "S") {
+    event.preventDefault();
+    keys.s = true;
+    keys.S = true;
+  } else if (event.key === "a" || event.key === "A") {
+    event.preventDefault();
+    keys.a = true;
+    keys.A = true;
+  } else if (event.key === "d" || event.key === "D") {
+    event.preventDefault();
+    keys.d = true;
+    keys.D = true;
+  } else if (event.key === "q" || event.key === "Q") {
+    event.preventDefault();
+    keys.q = true;
+    keys.Q = true;
+  } else if (event.key === "e" || event.key === "E") {
+    event.preventDefault();
+    keys.e = true;
+    keys.E = true;
+  } else if (event.key === " ") {
+    event.preventDefault();
+    keys.Space = true;
+  } else if (event.key === "Shift") {
+    event.preventDefault();
+    keys.Shift = true;
+  } else if (event.key === "PageUp") {
+    event.preventDefault();
+    keys.PageUp = true;
+  } else if (event.key === "PageDown") {
+    event.preventDefault();
+    keys.PageDown = true;
   }
 });
+
+window.addEventListener("keyup", (event) => {
+  if (event.key === "ArrowUp") {
+    keys.ArrowUp = false;
+  } else if (event.key === "ArrowDown") {
+    keys.ArrowDown = false;
+  } else if (event.key === "ArrowLeft") {
+    keys.ArrowLeft = false;
+  } else if (event.key === "ArrowRight") {
+    keys.ArrowRight = false;
+  } else if (event.key === "w" || event.key === "W") {
+    keys.w = false;
+    keys.W = false;
+  } else if (event.key === "s" || event.key === "S") {
+    keys.s = false;
+    keys.S = false;
+  } else if (event.key === "a" || event.key === "A") {
+    keys.a = false;
+    keys.A = false;
+  } else if (event.key === "d" || event.key === "D") {
+    keys.d = false;
+    keys.D = false;
+  } else if (event.key === " ") {
+    keys.Space = false;
+  } else if (event.key === "Shift") {
+    keys.Shift = false;
+  } else if (event.key === "PageUp") {
+    keys.PageUp = false;
+  } else if (event.key === "PageDown") {
+    keys.PageDown = false;
+  } else if (event.key === "q" || event.key === "Q") {
+    keys.q = false;
+    keys.Q = false;
+  } else if (event.key === "e" || event.key === "E") {
+    keys.e = false;
+    keys.E = false;
+  }
+});
+
+// Функция обновления вращения моделей на основе нажатых клавиш
+function updateModelRotation() {
+  if (positionMode) return; // В режиме позиционирования вращение обрабатывается напрямую
+  if (activeModel < 1 || activeModel > buildingMeshes.length) return;
+  
+  const rotationSpeed = ROTATION_STEP * 0.5; // Плавное вращение при удержании клавиш
+  
+  if (keys.q || keys.Q) {
+    rotateActiveModel(-rotationSpeed);
+  }
+  if (keys.e || keys.E) {
+    rotateActiveModel(rotationSpeed);
+  }
+}
+
+// Функция обновления позиции камеры на основе нажатых клавиш
+function updateCameraMovement() {
+  if (positionMode) return; // Не двигаем камеру в режиме позиционирования
+  
+  if (!camera || !camera.target || !Array.isArray(camera.target)) {
+    return; // Проверка на валидность камеры
+  }
+
+  try {
+    const moveSpeed = 5.0; // Скорость движения камеры (увеличена для большого поля)
+    const forwardX = -Math.sin(camera.yaw);
+    const forwardZ = -Math.cos(camera.yaw);
+    const leftX = -Math.cos(camera.yaw);
+    const leftZ = Math.sin(camera.yaw);
+
+    let moveX = 0;
+    let moveZ = 0;
+    let moveY = 0;
+
+    // Вперёд/назад
+    if (keys.ArrowUp || keys.w || keys.W) {
+      moveX += forwardX * moveSpeed;
+      moveZ += forwardZ * moveSpeed;
+    }
+    if (keys.ArrowDown || keys.s || keys.S) {
+      moveX -= forwardX * moveSpeed;
+      moveZ -= forwardZ * moveSpeed;
+    }
+
+    // Влево/вправо
+    if (keys.ArrowLeft || keys.a || keys.A) {
+      moveX += leftX * moveSpeed;
+      moveZ += leftZ * moveSpeed;
+    }
+    if (keys.ArrowRight || keys.d || keys.D) {
+      moveX -= leftX * moveSpeed;
+      moveZ -= leftZ * moveSpeed;
+    }
+
+    // Вверх/вниз
+    if (keys.Space || keys.PageUp) {
+      moveY += moveSpeed;
+    }
+    if (keys.Shift || keys.PageDown) {
+      moveY -= moveSpeed;
+    }
+
+    // Проверяем, что значения валидны перед применением
+    if (isFinite(moveX) && isFinite(moveY) && isFinite(moveZ)) {
+      camera.target[0] += moveX;
+      camera.target[1] += moveY;
+      camera.target[2] += moveZ;
+    }
+  } catch (error) {
+    console.error("Ошибка в updateCameraMovement:", error);
+  }
+}
 
 function resize() {
   const dpr = Math.min(window.devicePixelRatio, 2);
@@ -1123,66 +1489,116 @@ function getCameraPosition() {
 }
 
 function drawMesh(mesh, useTexture) {
-  if (mesh.vao) {
-    gl.bindVertexArray(mesh.vao);
-  } else {
-    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[0]);
-    gl.enableVertexAttribArray(attribs.position);
-    gl.vertexAttribPointer(attribs.position, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[1]);
-    gl.enableVertexAttribArray(attribs.normal);
-    gl.vertexAttribPointer(attribs.normal, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[2]);
-    gl.enableVertexAttribArray(attribs.uv);
-    gl.vertexAttribPointer(attribs.uv, 2, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[3]);
-    gl.enableVertexAttribArray(attribs.color);
-    gl.vertexAttribPointer(attribs.color, 3, gl.FLOAT, false, 0, 0);
+  if (!mesh || !mesh.count || mesh.count <= 0) {
+    return; // Пропускаем пустые меши
   }
-  gl.uniform1f(uniforms.useTexture, useTexture ? 1 : 0);
-  gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
-  if (mesh.vao) gl.bindVertexArray(null);
+  
+  try {
+    if (mesh.vao) {
+      gl.bindVertexArray(mesh.vao);
+    } else {
+      if (!mesh.buffers || mesh.buffers.length < 4) {
+        return; // Нет необходимых буферов
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[0]);
+      gl.enableVertexAttribArray(attribs.position);
+      gl.vertexAttribPointer(attribs.position, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[1]);
+      gl.enableVertexAttribArray(attribs.normal);
+      gl.vertexAttribPointer(attribs.normal, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[2]);
+      gl.enableVertexAttribArray(attribs.uv);
+      gl.vertexAttribPointer(attribs.uv, 2, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffers[3]);
+      gl.enableVertexAttribArray(attribs.color);
+      gl.vertexAttribPointer(attribs.color, 3, gl.FLOAT, false, 0, 0);
+    }
+    gl.uniform1f(uniforms.useTexture, useTexture ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+    if (mesh.vao) gl.bindVertexArray(null);
+  } catch (error) {
+    console.error("Ошибка при отрисовке меша:", error);
+    // Не выбрасываем ошибку дальше, просто пропускаем этот меш
+  }
 }
 
 function render() {
-  gl.clearColor(0.88, 0.88, 0.88, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
+  try {
+    // Проверяем, что WebGL контекст не потерян
+    if (!gl || gl.isContextLost()) {
+      console.error("WebGL контекст потерян");
+      return;
+    }
 
-  gl.useProgram(program);
+    // Обновляем движение камеры на основе нажатых клавиш
+    updateCameraMovement();
+    
+    // Обновляем вращение моделей на основе нажатых клавиш
+    updateModelRotation();
 
-  const eye = getCameraPosition();
-  const view = mat4LookAt(eye, camera.target, [0, 1, 0]);
-  const proj = mat4Perspective(
-    (55 * Math.PI) / 180,
-    canvas.width / canvas.height,
-    0.1,
-    1000,
-  );
-  const viewProj = mat4Multiply(proj, view);
-  gl.uniformMatrix4fv(uniforms.viewProj, false, new Float32Array(viewProj));
-  gl.uniform3f(uniforms.lightDir, -0.3, -1.0, -0.2);
-  // Макет только первого этажа — отключаем межэтажные полосы
-  gl.uniform1f(uniforms.floorStep, 0.0);
-  gl.uniform1f(uniforms.floorBand, 0.0);
-
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.uniform1i(uniforms.tex, 0);
-
-  if (showPlan) {
-    gl.disable(gl.DEPTH_TEST);
-    drawMesh(floorGPU, false);
+    gl.clearColor(0.88, 0.88, 0.88, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
-  }
-  drawMesh(buildingGPU, false);
-  if (buildingGPU2) {
-    drawMesh(buildingGPU2, false);
-  }
-  drawMesh(wallsGPU, false);
-  drawMesh(roomsGPU, false);
 
-  requestAnimationFrame(render);
+    gl.useProgram(program);
+
+    const eye = getCameraPosition();
+    const view = mat4LookAt(eye, camera.target, [0, 1, 0]);
+    
+    // Проверяем, что canvas имеет валидные размеры
+    const aspect = canvas.width / canvas.height;
+    if (!isFinite(aspect) || aspect <= 0) {
+      requestAnimationFrame(render);
+      return;
+    }
+    
+    const proj = mat4Perspective(
+      (55 * Math.PI) / 180,
+      aspect,
+      0.1,
+      10000, // Увеличена дальность обзора для видимости всего большого пола
+    );
+    const viewProj = mat4Multiply(proj, view);
+    gl.uniformMatrix4fv(uniforms.viewProj, false, new Float32Array(viewProj));
+    gl.uniform3f(uniforms.lightDir, -0.3, -1.0, -0.2);
+    // Макет только первого этажа — отключаем межэтажные полосы
+    gl.uniform1f(uniforms.floorStep, 0.0);
+    gl.uniform1f(uniforms.floorBand, 0.0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(uniforms.tex, 0);
+
+    if (showPlan) {
+      gl.disable(gl.DEPTH_TEST);
+      if (floorGPU && floorGPU.count > 0) {
+        drawMesh(floorGPU, false);
+      }
+      gl.enable(gl.DEPTH_TEST);
+      // Рисуем сетку поверх пола для ориентации в размерах
+      if (gridGPU && gridGPU.count > 0) {
+        drawMesh(gridGPU, false);
+      }
+    }
+    // Рисуем все загруженные модели
+    for (let i = 0; i < buildingGPUs.length; i++) {
+      if (buildingGPUs[i] && buildingGPUs[i].count > 0) {
+        drawMesh(buildingGPUs[i], false);
+      }
+    }
+    if (wallsGPU && wallsGPU.count > 0) {
+      drawMesh(wallsGPU, false);
+    }
+    if (roomsGPU && roomsGPU.count > 0) {
+      drawMesh(roomsGPU, false);
+    }
+
+    requestAnimationFrame(render);
+  } catch (error) {
+    console.error("Ошибка в функции render:", error);
+    // Не перезагружаем страницу, просто останавливаем рендеринг
+    // requestAnimationFrame(render); // Закомментировано, чтобы не было бесконечного цикла ошибок
+  }
 }
 
 // Экспорт модели в OBJ формат
@@ -1225,10 +1641,18 @@ function exportToOBJ() {
 }
 
 function exportPositions() {
-  const payload = {
-    model1: { offset: { ...modelOffsets.model1 }, rotation: { ...modelRotations.model1 } },
-    model2: { offset: { ...modelOffsets.model2 }, rotation: { ...modelRotations.model2 } },
-  };
+  const payload = {};
+  // Экспортируем позиции всех загруженных моделей
+  for (let i = 0; i < buildingMeshes.length; i++) {
+    const modelKey = `model${i + 1}`;
+    if (modelOffsets[modelKey] && modelRotations[modelKey]) {
+      payload[modelKey] = {
+        offset: { ...modelOffsets[modelKey] },
+        rotation: { ...modelRotations[modelKey] },
+        file: modelFiles[i] || `models/model${i + 1}.obj`
+      };
+    }
+  }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1267,5 +1691,17 @@ if (togglePlanBtn) {
     togglePlanBtn.textContent = showPlan ? "Hide Plan" : "Show Plan";
   });
 }
+
+// Глобальный обработчик ошибок для предотвращения перезагрузки страницы
+window.addEventListener("error", (event) => {
+  console.error("Глобальная ошибка:", event.error);
+  event.preventDefault(); // Предотвращаем перезагрузку страницы
+  return false;
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Необработанное обещание:", event.reason);
+  event.preventDefault(); // Предотвращаем перезагрузку страницы
+});
 
 render();
