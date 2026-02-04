@@ -37,19 +37,15 @@
    ```bash
    python start_server.py
    ```
-   или
-   ```bash
-   start-server.bat
-   ```
 3. Откройте браузер: http://localhost:3000
 
 ## Структура проекта
 
-- `fa-main/index.html` - главная страница
-- `fa-main/main.js` - основной код приложения
-- `fa-main/styles.css` - стили
-- `fa-main/models/` - папка с OBJ моделями
-- `fa-main/model_positions.json` - файл с позициями моделей
+- `index.html` - главная страница
+- `main.js` - основной код приложения
+- `styles.css` - стили
+- `models/` - папка с OBJ моделями
+- `model_positions.json` - файл с позициями моделей
 
 ## Технологии
 

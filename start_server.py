@@ -4,12 +4,20 @@ import http.server
 import os
 import socketserver
 
-DIR = os.path.join(os.path.dirname(__file__), "fa-main")
+# Получаем директорию, где находится этот скрипт
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PORT = 3000
 
-os.chdir(DIR)
+# Переходим в директорию скрипта
+os.chdir(SCRIPT_DIR)
+
 Handler = http.server.SimpleHTTPRequestHandler
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     print(f"Server at http://localhost:{PORT}")
-    print("Press Ctrl+C to stop.")
+    print(f"Serving directory: {SCRIPT_DIR}")
+    print("Available files:")
+    for f in sorted(os.listdir(".")):
+        if f.endswith(".html"):
+            print(f"  - {f}")
+    print("\nPress Ctrl+C to stop.")
     httpd.serve_forever()

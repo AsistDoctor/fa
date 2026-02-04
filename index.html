@@ -3,21 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Floor Plan 3D (WebGL)</title>
+    <title>Floor Plan 3D</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "./node_modules/three/build/three.module.min.js",
+        "three/addons/": "./node_modules/three/examples/jsm/"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="app">
       <canvas id="c" tabindex="0"></canvas>
       <div class="hud">
         <div class="title">3D Model</div>
-        <div class="hint">Drag to orbit • Scroll to zoom • Arrows/WASD to fly • Space/Shift to move up/down • 1-8 select model • Q/E rotate model</div>
+        <div class="hint">Drag to orbit • Scroll to zoom • Arrows/WASD to fly • Space/Shift to move up/down • 1-9 select model • Q/E rotate model • In Position Mode: Arrows move, Space/Shift lift/lower</div>
         <button id="togglePlanBtn" class="export-btn">Hide Plan</button>
         <button id="exportBtn" class="export-btn">Export to OBJ</button>
         <button id="positionModeBtn" class="export-btn">Position Mode: Off</button>
         <button id="exportPositionsBtn" class="export-btn">Export Positions</button>
+        <div style="margin-top: 8px;">
+          <label id="scaleLabel" style="display: block; margin-bottom: 4px; font-size: 11px;">Масштаб модели (Model 1):</label>
+          <div style="margin-bottom: 6px;">
+            <label style="font-size: 10px; display: inline-block; width: 20px;">X:</label>
+            <input type="range" id="modelScaleXSlider" min="0.1" max="3" step="0.01" value="1" style="width: 150px;">
+            <span id="scaleXValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+          </div>
+          <div style="margin-bottom: 6px;">
+            <label style="font-size: 10px; display: inline-block; width: 20px;">Y:</label>
+            <input type="range" id="modelScaleYSlider" min="0.1" max="3" step="0.01" value="1" style="width: 150px;">
+            <span id="scaleYValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+          </div>
+          <div style="margin-bottom: 6px;">
+            <label style="font-size: 10px; display: inline-block; width: 20px;">Z:</label>
+            <input type="range" id="modelScaleZSlider" min="0.1" max="3" step="0.01" value="1" style="width: 150px;">
+            <span id="scaleZValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+          </div>
+        </div>
       </div>
     </div>
+    <!-- Загружаем main.js как модуль - он сам загрузит Three.js через importmap -->
     <script type="module" src="main.js"></script>
   </body>
 </html>
