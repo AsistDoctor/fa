@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Техническая Документация: 3D Floor Plan Viewer</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 40px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #3498db;
+            padding-bottom: 15px;
+            font-size: 28px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 8px;
+            font-size: 22px;
+        }
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            font-size: 18px;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        pre {
+            background-color: #f8f8f8;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border-left: 5px solid #3498db;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 35px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 3px 6px;
+            border-radius: 3px;
+        }
+        .important {
+            background-color: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Техническая Документация: 3D Floor Plan Viewer</h1>
+
+<div class="important">
+<strong>Внимание:</strong> Этот документ описывает внутреннее устройство и принципы работы веб-приложения для визуализации и позиционирования 3D моделей зданий на плане этажа.
+</div>
+
+<h2>1. Архитектура приложения</h2>
+
+<h3>1.1. Общая структура</h3>
+<p>Приложение построено на базе библиотеки <strong>Three.js v0.169.0</strong> и использует WebGL для рендеринга 3D графики. Three.js предоставляет высокоуровневый API для работы с 3D сценами, камерами, освещением и моделями, что упрощает разработку и обеспечивает кроссплатформенную совместимость.</p>
+
+<h3>1.2. Основные компоненты</h3>
+<table>
+    <tr>
+        <th>Компонент</th>
+        <th>Файл</th>
+        <th>Назначение</th>
+    </tr>
+    <tr>
+        <td>HTML структура</td>
+        <td>index.html</td>
+        <td>Определяет canvas элемент для WebGL и панель управления (HUD)</td>
+    </tr>
+    <tr>
+        <td>Основная логика</td>
+        <td>main.js</td>
+        <td>Содержит весь код приложения: Three.js сцена, загрузка моделей через OBJLoader, управление камерой через OrbitControls, рендеринг через WebGLRenderer, система меток через CSS2DRenderer</td>
+    </tr>
+    <tr>
+        <td>Стили</td>
+        <td>styles.css</td>
+        <td>Оформление интерфейса и панели управления</td>
+    </tr>
+    <tr>
+        <td>Конфигурация</td>
+        <td>model_positions.json</td>
+        <td>Сохранённые позиции, повороты, масштабы всех моделей и меток (labels)</td>
+    </tr>
+</table>
+
+<h2>2. Three.js рендеринг</h2>
+
+<h3>2.1. Инициализация сцены</h3>
+<p>При загрузке страницы создаётся Three.js сцена и рендерер:</p>
+<pre>const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 10000);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const labelRenderer = new CSS2DRenderer(); // Для HTML меток</pre>
+
+<h3>2.2. Рендеринг 3D объектов</h3>
+<p>Three.js автоматически обрабатывает:</p>
+<ul>
+    <li><strong>Преобразование координат:</strong> Матрицы проекции и вида вычисляются автоматически</li>
+    <li><strong>Освещение:</strong> Используются AmbientLight и DirectionalLight для реалистичного освещения</li>
+    <li><strong>Материалы:</strong> MeshStandardMaterial с настройками metalness и roughness</li>
+    <li><strong>Геометрия:</strong> Загружается через OBJLoader и обрабатывается Three.js</li>
+</ul>
+
+<h3>2.3. Рендеринг меток (CSS2DRenderer)</h3>
+<p>HTML метки рендерятся поверх 3D сцены через CSS2DRenderer:</p>
+<ul>
+    <li>Метки позиционируются в 3D пространстве через CSS2DObject</li>
+    <li>Автоматически отслеживают позицию камеры</li>
+    <li>Остаются видимыми при любом угле обзора</li>
+    <li>Поддерживают HTML/CSS стилизацию</li>
+</ul>
+
+<h3>2.4. Система матриц</h3>
+<p>Three.js автоматически управляет матрицами:</p>
+<ul>
+    <li><strong>PerspectiveCamera:</strong> Создаёт матрицу перспективной проекции
+        <ul>
+            <li>FOV: 55 градусов</li>
+            <li>Near plane: 0.1</li>
+            <li>Far plane: 10000 (для видимости большого поля)</li>
+        </ul>
+    </li>
+    <li><strong>OrbitControls:</strong> Автоматически обновляет матрицу вида камеры</li>
+    <li><strong>Object3D:</strong> Каждая модель имеет свою матрицу трансформации</li>
+</ul>
+
+<h2>3. Загрузка и обработка 3D моделей</h2>
+
+<h3>3.1. Загрузка OBJ файлов через OBJLoader</h3>
+<p>Функция <code>loadAllModels()</code> использует <code>OBJLoader</code> из Three.js для загрузки моделей:</p>
+
+<ol>
+    <li><strong>Инициализация загрузчика:</strong> <code>const loader = new OBJLoader();</code></li>
+    <li><strong>Асинхронная загрузка:</strong> Для каждого файла создаётся Promise с использованием <code>loader.load()</code></li>
+    <li><strong>Обработка загруженной модели:</strong>
+        <ul>
+            <li>Вычисление границ модели через <code>THREE.Box3().setFromObject()</code></li>
+            <li>Определение центра и размеров модели</li>
+            <li>Масштабирование под размер плана (90% от PLAN_SIZE)</li>
+            <li>Центрирование модели</li>
+            <li>Выравнивание по полу (поднятие над планом)</li>
+            <li>Применение материала MeshStandardMaterial к каждой части модели</li>
+            <li>Вычисление нормалей через <code>geometry.computeVertexNormals()</code></li>
+        </ul>
+    </li>
+    <li><strong>Обработка всех моделей:</strong> Используется <code>Promise.allSettled()</code> для параллельной загрузки</li>
+    <li><strong>Применение позиций:</strong> После загрузки применяются позиции из <code>model_positions.json</code></li>
+</ol>
+
+<h3>3.2. Структура данных модели</h3>
+<p>Каждая модель загружается как <code>THREE.Object3D</code> (группа) и содержит:</p>
+<ul>
+    <li><strong>Дочерние объекты:</strong> Каждая часть модели (mesh) является дочерним объектом</li>
+    <li><strong>Геометрия:</strong> <code>THREE.BufferGeometry</code> с атрибутами:
+        <ul>
+            <li><code>position</code> — координаты вершин</li>
+            <li><code>normal</code> — нормали вершин</li>
+            <li><code>uv</code> — UV координаты (если есть)</li>
+        </ul>
+    </li>
+    <li><strong>Материал:</strong> <code>THREE.MeshStandardMaterial</code> с настройками цвета, metalness, roughness</li>
+    <li><strong>Трансформации:</strong> position, rotation, scale для позиционирования в сцене</li>
+</ul>
+
+<h3>3.3. Обработка моделей после загрузки</h3>
+<p>После загрузки всех моделей выполняется:</p>
+
+<ol>
+    <li><strong>Вычисление высот:</strong> Для каждой модели вычисляется высота через <code>Box3.getSize()</code></li>
+    <li><strong>Применение позиций из JSON:</strong> Загружаются позиции, повороты и масштабы из <code>model_positions.json</code></li>
+    <li><strong>Расширение плана:</strong> План автоматически расширяется под все модели через <code>expandFloorToFitModels()</code></li>
+    <li><strong>Загрузка меток:</strong> Загружаются метки из секции <code>labels</code> файла <code>model_positions.json</code></li>
+</ol>
+
+<p class="important"><strong>Примечание:</strong> Нормализация высоты моделей отключена в текущей версии. Каждая модель сохраняет свои пропорции.</p>
+
+<h2>4. Система камеры</h2>
+
+<h3>4.1. OrbitControls</h3>
+<p>Камера управляется через <code>THREE.OrbitControls</code>, который автоматически обрабатывает:</p>
+<ul>
+    <li><strong>target:</strong> Точка в пространстве, на которую направлена камера (устанавливается через <code>controls.target.set()</code>)</li>
+    <li><strong>distance:</strong> Расстояние от target до камеры (60-2000 единиц, управляется колёсиком мыши)</li>
+    <li><strong>Вращение:</strong> Горизонтальный и вертикальный углы (управляются перетаскиванием мыши)</li>
+    <li><strong>Damping:</strong> Плавное движение камеры (enableDamping = true, dampingFactor = 0.05)</li>
+</ul>
+
+<h3>4.2. Ограничения камеры</h3>
+<p>OrbitControls автоматически применяет ограничения:</p>
+<ul>
+    <li><strong>minDistance:</strong> 60 единиц — минимальное приближение</li>
+    <li><strong>maxDistance:</strong> 2000 единиц — максимальное отдаление</li>
+    <li><strong>minPolarAngle:</strong> 0.2 радиан — минимальный угол наклона (нельзя смотреть снизу)</li>
+    <li><strong>maxPolarAngle:</strong> 1.88 радиан (π * 0.6) — максимальный угол наклона</li>
+</ul>
+
+<h3>4.3. Управление камерой</h3>
+
+<h4>Мышь (OrbitControls)</h4>
+<ul>
+    <li><strong>Перетаскивание:</strong> Вращение камеры вокруг target (автоматически обрабатывается OrbitControls)</li>
+    <li><strong>Колёсико:</strong> Приближение/отдаление камеры (автоматически обрабатывается OrbitControls)</li>
+</ul>
+
+<h4>Клавиатура (дополнительное управление)</h4>
+<p>Система отслеживает нажатые клавиши через объект <code>keys</code> и обновляет позицию камеры каждый кадр в функции <code>updateCameraMovement()</code>:</p>
+
+<ul>
+    <li><strong>Стрелки/WASD:</strong> Движение камеры по горизонтали
+        <ul>
+            <li>Вычисляются векторы "вперёд" и "влево" на основе направления камеры</li>
+            <li>Применяется скорость движения (5.0 единиц за кадр)</li>
+            <li>Обновляются позиция камеры и target синхронно</li>
+        </ul>
+    </li>
+    <li><strong>Space/PageUp:</strong> Движение камеры вверх (изменяет позицию камеры и target по оси Y)</li>
+    <li><strong>Shift/PageDown:</strong> Движение камеры вниз</li>
+    <li><strong>R:</strong> Сброс камеры к начальной позиции (camera.position.set(0, 480, 480), target.set(0, 2, -10))</li>
+</ul>
+
+<h4>Отключение управления</h4>
+<p>При включении режима "Add Label Mode" управление камерой полностью отключается:</p>
+<ul>
+    <li><code>controls.enabled = false</code> — OrbitControls отключается</li>
+    <li>Движение камеры через клавиатуру блокируется в функции <code>updateCameraMovement()</code></li>
+    <li>При выключении режима управление автоматически включается обратно</li>
+</ul>
+
+<h2>5. Позиционирование моделей</h2>
+
+<h3>5.1. Структура данных позиционирования</h3>
+<p>Для каждой модели хранятся:</p>
+<ul>
+    <li><strong>modelOffsets[modelKey]:</strong> Смещение модели {x, y, z} — позиция модели в сцене</li>
+    <li><strong>modelRotations[modelKey]:</strong> Поворот модели {yaw} — угол поворота вокруг оси Y</li>
+    <li><strong>initialModelScales[modelKey]:</strong> Начальные масштабы модели {x, y, z} — для вычисления относительных масштабов</li>
+</ul>
+
+<h3>5.2. Применение трансформаций</h3>
+<p>Three.js автоматически применяет трансформации к моделям через свойства объекта:</p>
+
+<ul>
+    <li><strong>model.position.set(x, y, z):</strong> Устанавливает позицию модели в сцене</li>
+    <li><strong>model.rotation.y = yaw:</strong> Устанавливает поворот вокруг оси Y</li>
+    <li><strong>model.scale.set(sx, sy, sz):</strong> Устанавливает масштаб модели</li>
+</ul>
+
+<p>При изменении этих свойств Three.js автоматически обновляет матрицу трансформации модели.</p>
+
+<h3>5.3. Управление позиционированием</h3>
+<p>В режиме Position Mode (включается кнопкой "Position Mode: On"):</p>
+<ul>
+    <li><strong>Стрелки вверх/вниз:</strong> Перемещение активной модели по оси Z</li>
+    <li><strong>Стрелки влево/вправо:</strong> Перемещение активной модели по оси X</li>
+    <li><strong>Q:</strong> Поворот модели против часовой стрелки (дискретный шаг)</li>
+    <li><strong>E:</strong> Поворот модели по часовой стрелке (дискретный шаг)</li>
+    <li><strong>Space / PageUp:</strong> Поднять модель (увеличить Y)</li>
+    <li><strong>Shift / PageDown:</strong> Опустить модель (уменьшить Y)</li>
+    <li><strong>1-9:</strong> Выбор активной модели</li>
+</ul>
+
+<p>Вне режима Position Mode:</p>
+<ul>
+    <li><strong>Q/E:</strong> Плавное вращение активной модели (при удержании клавиш, скорость: ROTATION_STEP * 0.5)</li>
+    <li><strong>1-9:</strong> Выбор активной модели</li>
+</ul>
+
+<h3>5.4. Масштабирование моделей</h3>
+<p>Ползунки в панели управления позволяют масштабировать активную модель по осям:</p>
+<ul>
+    <li><strong>Диапазон:</strong> 10% - 300% от исходного размера</li>
+    <li><strong>Масштабирование:</strong> Относительно центра модели (позиция модели сохраняется)</li>
+    <li><strong>Сохранение:</strong> Относительные масштабы сохраняются в model_positions.json (1.0 = 100%)</li>
+</ul>
+
+<h2>6. Цикл рендеринга</h2>
+
+<h3>6.1. Функция animate()</h3>
+<p>Вызывается каждый кадр через <code>requestAnimationFrame()</code> и выполняет:</p>
+
+<ol>
+    <li><strong>Обновление движения камеры:</strong> <code>updateCameraMovement()</code> — обрабатывает нажатые клавиши (только если не в режиме меток)</li>
+    <li><strong>Обновление вращения моделей:</strong> <code>updateModelRotation()</code> — обрабатывает Q/E клавиши (только если не в режиме позиционирования)</li>
+    <li><strong>Обновление OrbitControls:</strong> <code>controls.update()</code> — обновляет позицию камеры (только если controls.enabled = true)</li>
+    <li><strong>Рендеринг 3D сцены:</strong> <code>renderer.render(scene, camera)</code> — отрисовывает все объекты в сцене:
+        <ul>
+            <li>Пол (PlaneGeometry) — если включен</li>
+            <li>Сетка (GridHelper) — если включен план</li>
+            <li>Все модели (загруженные через OBJLoader)</li>
+            <li>Освещение (AmbientLight, DirectionalLight)</li>
+        </ul>
+    </li>
+    <li><strong>Рендеринг меток:</strong> <code>labelRenderer.render(scene, camera)</code> — отрисовывает HTML метки поверх 3D сцены</li>
+    <li><strong>Запрос следующего кадра:</strong> <code>requestAnimationFrame(animate)</code></li>
+</ol>
+
+<h3>6.2. Обработка ошибок</h3>
+<p>Приложение использует глобальные обработчики ошибок:</p>
+<ul>
+    <li><code>window.addEventListener("error")</code> — обработка JavaScript ошибок</li>
+    <li><code>window.addEventListener("unhandledrejection")</code> — обработка необработанных Promise rejections</li>
+    <li>Проверка наличия canvas элемента перед инициализацией</li>
+    <li>Проверка успешной загрузки моделей через Promise.allSettled()</li>
+    <li>Ошибки логируются в консоль, но не прерывают работу приложения</li>
+</ul>
+
+<h2>7. Загрузка и сохранение позиций</h2>
+
+<h3>7.1. Автоматическая загрузка позиций</h3>
+<p>При загрузке страницы (через 500ms после загрузки моделей) вызывается <code>loadModelPositions()</code>:</p>
+
+<ol>
+    <li>Загружается файл <code>model_positions.json</code> через <code>fetch()</code></li>
+    <li>Для каждой модели из JSON:
+        <ul>
+            <li>Применяются позиции (<code>offset</code>), повороты (<code>rotation</code>) и масштабы (<code>scale</code>)</li>
+            <li>Масштабы интерпретируются как относительные значения (1.0 = 100%)</li>
+            <li>Обновляется позиция модели в сцене</li>
+        </ul>
+    </li>
+    <li>После применения позиций моделей вызывается <code>loadLabelsFromJSON()</code>:
+        <ul>
+            <li>Пытается загрузить метки из секции <code>labels</code> файла <code>model_positions.json</code></li>
+            <li>Если секция отсутствует, загружает из localStorage</li>
+            <li>Создает метки в сцене с сохраненными параметрами</li>
+        </ul>
+    </li>
+</ol>
+
+<h3>7.2. Экспорт позиций</h3>
+<p>Функция <code>exportPositions()</code> создаёт JSON файл со всеми позициями моделей и меток:</p>
+<ul>
+    <li><strong>Модели:</strong> Собирает данные из позиций, поворотов и относительных масштабов всех моделей</li>
+    <li><strong>Метки:</strong> Добавляет секцию <code>labels</code> со всеми метками (текст, позиция, стили, привязка к модели)</li>
+    <li><strong>Экспорт:</strong> Создаёт Blob и автоматически скачивает файл <code>model_positions.json</code></li>
+</ul>
+
+<h3>7.3. Сохранение меток</h3>
+<p>Функция <code>saveLabelsToJSON()</code> вызывается при каждом изменении меток:</p>
+<ul>
+    <li>Сохраняет метки только в <code>localStorage</code> (без автоматического скачивания файла)</li>
+    <li>Метки включаются в экспорт только при нажатии кнопки "Export Positions"</li>
+    <li>Это предотвращает множественные скачивания файлов при редактировании</li>
+</ul>
+
+<h2>8. Оптимизации и производительность</h2>
+
+<h3>8.1. Оптимизации Three.js</h3>
+<ul>
+    <li><strong>BufferGeometry:</strong> Three.js автоматически использует BufferGeometry для эффективного хранения данных вершин</li>
+    <li><strong>Статические буферы:</strong> Данные моделей загружаются в GPU один раз и переиспользуются</li>
+    <li><strong>Frustum Culling:</strong> Three.js автоматически отсекает объекты вне видимости камеры</li>
+    <li><strong>Pixel Ratio:</strong> Ограничен до 2 для предотвращения избыточного рендеринга на Retina дисплеях</li>
+</ul>
+
+<h3>8.2. Оптимизации меток</h3>
+<ul>
+    <li><strong>CSS2DRenderer:</strong> Метки рендерятся как HTML элементы, что эффективнее чем создание 3D текста</li>
+    <li><strong>Обновление по требованию:</strong> Панель меток обновляется только при открытии или изменении меток</li>
+    <li><strong>Локальное хранение:</strong> Метки сохраняются в localStorage для быстрого доступа</li>
+</ul>
+
+<h3>8.3. Проверки валидности</h3>
+<ul>
+    <li>Проверка существования моделей перед операциями</li>
+    <li>Проверка наличия элементов DOM перед использованием</li>
+    <li>Проверка валидности индексов моделей (1-9)</li>
+    <li>Обработка ошибок загрузки через Promise.allSettled()</li>
+</ul>
+
+<h2>9. Обработка событий</h2>
+
+<h3>9.1. События мыши</h3>
+<ul>
+    <li><strong>mousedown/mousemove/mouseup:</strong> Управление камерой через OrbitControls (вращение, перетаскивание)</li>
+    <li><strong>wheel:</strong> Изменение расстояния камеры (zoom) через OrbitControls</li>
+    <li><strong>click (canvas):</strong> 
+        <ul>
+            <li>В обычном режиме: установка фокуса на canvas для обработки клавиатуры</li>
+            <li>В режиме "Add Label Mode": создание метки в точке клика
+                <ul>
+                    <li>Клик по модели: создает метку, привязанную к модели</li>
+                    <li>Клик по пустому месту: создает свободную метку на плоскости</li>
+                    <li>Клик по UI элементам: игнорируется</li>
+                </ul>
+            </li>
+        </ul>
+    </li>
+    <li><strong>click (метка):</strong> Открывает модальное окно для редактирования метки</li>
+</ul>
+
+<h3>9.2. События клавиатуры</h3>
+<p>Система отслеживает нажатые клавиши через объект <code>keys</code> и обрабатывает их каждый кадр:</p>
+
+<h4>Управление камерой (в обычном режиме):</h4>
+<ul>
+    <li><strong>WASD / Стрелки:</strong> Движение камеры по горизонтали</li>
+    <li><strong>Space / PageUp:</strong> Движение камеры вверх</li>
+    <li><strong>Shift / PageDown:</strong> Движение камеры вниз</li>
+    <li><strong>R:</strong> Сброс камеры к начальной позиции</li>
+</ul>
+
+<h4>Управление моделями:</h4>
+<ul>
+    <li><strong>1-9:</strong> Выбор активной модели</li>
+    <li><strong>Q/E:</strong> Вращение активной модели (в обычном режиме — плавное, в Position Mode — дискретное)</li>
+</ul>
+
+<h4>Режим позиционирования (Position Mode):</h4>
+<ul>
+    <li><strong>Стрелки:</strong> Перемещение активной модели (вверх/вниз — по Z, влево/вправо — по X)</li>
+    <li><strong>Space / PageUp:</strong> Поднять модель (ось Y)</li>
+    <li><strong>Shift / PageDown:</strong> Опустить модель (ось Y)</li>
+    <li><strong>Q/E:</strong> Поворот модели (дискретный шаг)</li>
+</ul>
+
+<p class="important"><strong>Примечание:</strong> В режиме "Add Label Mode" управление камерой и моделями отключается.</p>
+
+<h3>9.3. События окна</h3>
+<ul>
+    <li><strong>resize:</strong> Обновление размеров canvas при изменении размера окна</li>
+    <li><strong>load:</strong> Установка фокуса на canvas при загрузке страницы</li>
+    <li><strong>error:</strong> Глобальный обработчик ошибок для предотвращения перезагрузки страницы</li>
+    <li><strong>unhandledrejection:</strong> Обработка необработанных Promise rejections</li>
+</ul>
+
+<h2>10. Константы и настройки</h2>
+
+<h3>10.1. Размеры</h3>
+<table>
+    <tr>
+        <th>Константа</th>
+        <th>Значение</th>
+        <th>Описание</th>
+    </tr>
+    <tr>
+        <td>PLAN_SIZE</td>
+        <td>220 * 5 = 1100</td>
+        <td>Базовый размер плана (используется для масштабирования моделей)</td>
+    </tr>
+    <tr>
+        <td>PLAN_TEXTURE_SIZE</td>
+        <td>PLAN_SIZE * 1.35</td>
+        <td>Начальный размер текстуры плана (динамически расширяется под модели)</td>
+    </tr>
+    <tr>
+        <td>PLAN_Y</td>
+        <td>-PLAN_SIZE * 0.03</td>
+        <td>Высота плана над нулевой точкой</td>
+    </tr>
+    <tr>
+        <td>MODEL_LIFT</td>
+        <td>PLAN_SIZE * 0.12</td>
+        <td>Высота поднятия моделей над планом</td>
+    </tr>
+</table>
+
+<h3>10.2. Скорости и шаги</h3>
+<table>
+    <tr>
+        <th>Параметр</th>
+        <th>Значение</th>
+        <th>Описание</th>
+    </tr>
+    <tr>
+        <td>POSITION_STEP</td>
+        <td>PLAN_SIZE * 0.01 = 11</td>
+        <td>Шаг перемещения модели в режиме Position Mode</td>
+    </tr>
+    <tr>
+        <td>ROTATION_STEP</td>
+        <td>Math.PI / 36 ≈ 0.087</td>
+        <td>Шаг поворота модели (5 градусов)</td>
+    </tr>
+    <tr>
+        <td>Скорость движения камеры</td>
+        <td>5.0</td>
+        <td>Единиц за кадр при движении камеры (WASD/стрелки)</td>
+    </tr>
+    <tr>
+        <td>Скорость вращения модели</td>
+        <td>ROTATION_STEP * 0.5</td>
+        <td>При удержании клавиш Q/E (плавное вращение)</td>
+    </tr>
+    <tr>
+        <td>dampingFactor</td>
+        <td>0.05</td>
+        <td>Коэффициент затухания для плавного движения камеры</td>
+    </tr>
+</table>
+
+<h3>10.3. Ограничения камеры (OrbitControls)</h3>
+<table>
+    <tr>
+        <th>Параметр</th>
+        <th>Минимум</th>
+        <th>Максимум</th>
+    </tr>
+    <tr>
+        <td>minDistance</td>
+        <td>60</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td>maxDistance</td>
+        <td>-</td>
+        <td>2000</td>
+    </tr>
+    <tr>
+        <td>minPolarAngle</td>
+        <td>0.2 рад</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td>maxPolarAngle</td>
+        <td>-</td>
+        <td>π * 0.6 ≈ 1.88 рад</td>
+    </tr>
+    <tr>
+        <td>Camera near plane</td>
+        <td>0.1</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td>Camera far plane</td>
+        <td>-</td>
+        <td>10000</td>
+    </tr>
+</table>
+
+<h2>11. Алгоритмы и математика</h2>
+
+<h3>11.1. Вычисление границ модели</h3>
+<p>Используется <code>THREE.Box3().setFromObject(model)</code> для автоматического вычисления:</p>
+<ul>
+    <li><strong>Минимальные и максимальные координаты:</strong> По всем осям (min, max)</li>
+    <li><strong>Центр модели:</strong> <code>box.getCenter(center)</code> — средняя точка между min и max</li>
+    <li><strong>Размер модели:</strong> <code>box.getSize(size)</code> — разница между max и min по каждой оси</li>
+</ul>
+
+<h3>11.2. Вычисление нормалей</h3>
+<p>Three.js автоматически вычисляет нормали через <code>geometry.computeVertexNormals()</code>:</p>
+<ul>
+    <li>Если нормали отсутствуют в OBJ файле, вычисляются автоматически</li>
+    <li>Используется алгоритм с учетом углов граней для плавного затенения</li>
+    <li>Параметр <code>true</code> включает использование углов граней для весов нормалей</li>
+</ul>
+
+<h3>11.3. Масштабирование моделей</h3>
+<p>При загрузке модели масштабируются под размер плана:</p>
+<pre>const maxDim = Math.max(size.x, size.z);
+const scale = (PLAN_SIZE * 0.9) / maxDim;
+model.scale.multiplyScalar(scale);</pre>
+
+<p>При изменении масштаба через ползунки:</p>
+<pre>// Относительный масштаб = текущий / начальный
+const relativeScale = currentScale / initialScale;
+
+// Применение к модели
+model.scale.set(
+  initialScale.x * relativeScaleX,
+  initialScale.y * relativeScaleY,
+  initialScale.z * relativeScaleZ
+);</pre>
+
+<h3>11.4. Raycasting для определения клика</h3>
+<p>При клике в режиме "Add Label Mode" используется <code>THREE.Raycaster</code>:</p>
+<ol>
+    <li>Нормализация координат мыши в диапазон [-1, 1]</li>
+    <li>Создание луча из камеры через точку клика</li>
+    <li>Проверка пересечения с моделями через <code>raycaster.intersectObjects()</code></li>
+    <li>Если пересечение найдено — создается метка на модели, иначе — на плоскости</li>
+</ol>
+
+<h2>12. Обработка ошибок и отладка</h2>
+
+<h3>12.1. Проверки валидности</h3>
+<ul>
+    <li>Проверка наличия canvas элемента перед инициализацией</li>
+    <li>Проверка успешной загрузки моделей через Promise.allSettled()</li>
+    <li>Проверка наличия элементов DOM перед использованием (labelsList, кнопки и т.д.)</li>
+    <li>Проверка валидности индексов моделей (1-9) перед операциями</li>
+    <li>Проверка существования меток перед редактированием/удалением</li>
+    <li>Обработка ошибок загрузки файлов через try-catch</li>
+</ul>
+
+<h3>12.2. Логирование</h3>
+<p>Приложение использует <code>console.log()</code>, <code>console.warn()</code> и <code>console.error()</code> для отладки:</p>
+<ul>
+    <li>Успешная загрузка моделей и их количество</li>
+    <li>Размеры и позиции моделей после загрузки</li>
+    <li>Расширение плана под модели</li>
+    <li>Загрузка позиций из JSON</li>
+    <li>Загрузка меток (количество и источник)</li>
+    <li>Инициализация кнопок и UI элементов</li>
+    <li>Состояние режимов (Position Mode, Add Label Mode)</li>
+    <li>Ошибки загрузки файлов и обработки данных</li>
+</ul>
+
+<h3>12.3. Глобальные обработчики ошибок</h3>
+<ul>
+    <li><code>window.addEventListener("error")</code> — перехватывает все JavaScript ошибки</li>
+    <li><code>window.addEventListener("unhandledrejection")</code> — обрабатывает необработанные Promise rejections</li>
+    <li>Ошибки логируются в консоль, но не прерывают работу приложения</li>
+</ul>
+
+<h2>13. Расширяемость</h2>
+
+<h3>13.1. Добавление новых моделей</h3>
+<ol>
+    <li>Поместить OBJ файл в папку <code>models/</code></li>
+    <li>Добавить путь в массив <code>modelFiles</code> в файле <code>main.js</code>:
+        <pre>const modelFiles = [
+  // ... существующие модели
+  "models/новая_модель.obj"
+];</pre>
+    </li>
+    <li>Модель загрузится автоматически при следующем открытии страницы</li>
+    <li>Позиция модели будет загружена из <code>model_positions.json</code> (если указана)</li>
+</ol>
+
+<h3>13.2. Добавление новых функций меток</h3>
+<p>Для расширения функциональности меток можно:</p>
+<ul>
+    <li>Добавить новые поля в структуру данных метки (в функции <code>createNewLabel</code>)</li>
+    <li>Добавить новые опции стилизации в функцию <code>createLabel</code></li>
+    <li>Создать новые типы меток (например, с иконками или изображениями)</li>
+    <li>Добавить анимации появления/исчезновения меток</li>
+</ul>
+
+<h3>13.3. Изменение настроек</h3>
+<ul>
+    <li><strong>Размер плана:</strong> Изменить <code>PLAN_SIZE</code> (по умолчанию: 1100)</li>
+    <li><strong>Скорости движения:</strong> Изменить значение в <code>updateCameraMovement()</code> (по умолчанию: 5.0)</li>
+    <li><strong>Шаг перемещения:</strong> Изменить <code>POSITION_STEP</code> (по умолчанию: PLAN_SIZE * 0.01)</li>
+    <li><strong>Шаг поворота:</strong> Изменить <code>ROTATION_STEP</code> (по умолчанию: Math.PI / 36)</li>
+    <li><strong>Ограничения камеры:</strong> Изменить minDistance, maxDistance, minPolarAngle, maxPolarAngle в OrbitControls</li>
+    <li><strong>Цвета и материалы:</strong> Изменить значения в MeshStandardMaterial при загрузке моделей</li>
+</ul>
+
+<h2>14. Система меток (Labels)</h2>
+
+<h3>14.1. Обзор</h3>
+<p>Система меток позволяет добавлять интерактивные HTML-элементы в 3D-пространство. Метки автоматически следуют за моделями при их перемещении и могут быть привязаны к конкретным моделям или размещены в произвольных точках сцены.</p>
+
+<h3>14.2. Основные возможности</h3>
+<ul>
+    <li><strong>Создание меток:</strong> Клик по модели или сцене в режиме "Add Label Mode"</li>
+    <li><strong>Редактирование меток:</strong> Клик по метке для открытия редактора</li>
+    <li><strong>Управление метками:</strong> Панель со списком всех меток</li>
+    <li><strong>Сохранение и загрузка:</strong> Метки сохраняются в model_positions.json вместе с моделями</li>
+</ul>
+
+<h3>14.3. Структура данных метки</h3>
+<pre>{
+  "labels": {
+    "label_1234567890_abc123": {
+      "text": "Название метки",
+      "position": {"x": 100.0, "y": 50.0, "z": -200.0},
+      "modelIndex": 1,
+      "backgroundColor": "rgba(74, 158, 255, 0.9)",
+      "color": "#ffffff",
+      "fontSize": "14px",
+      "offsetY": 30
+    }
+  }
+}</pre>
+
+<h3>14.4. Режим добавления меток</h3>
+<p>При включении режима "Add Label Mode":</p>
+<ul>
+    <li>Курсор меняется на крестик</li>
+    <li>Управление камерой отключается (controls.enabled = false)</li>
+    <li>Клик по модели создает метку, привязанную к модели</li>
+    <li>Клик по пустому месту создает свободную метку</li>
+</ul>
+
+<h2>15. Технологии</h2>
+
+<h3>15.1. Основной стек</h3>
+<ul>
+    <li><strong>Three.js v0.169.0</strong> — библиотека для 3D-графики</li>
+    <li><strong>WebGL</strong> — низкоуровневый API для рендеринга</li>
+    <li><strong>ES Modules</strong> — модульная система JavaScript</li>
+    <li><strong>CSS3</strong> — стилизация интерфейса</li>
+</ul>
+
+<h3>15.2. Используемые модули Three.js</h3>
+<ul>
+    <li>THREE.Scene — контейнер для 3D объектов</li>
+    <li>THREE.PerspectiveCamera — камера с перспективной проекцией</li>
+    <li>THREE.WebGLRenderer — рендерер для WebGL</li>
+    <li>THREE.OrbitControls — управление камерой</li>
+    <li>OBJLoader — загрузчик OBJ файлов</li>
+    <li>CSS2DRenderer — рендерер для HTML меток</li>
+    <li>CSS2DObject — объект для позиционирования HTML элементов в 3D</li>
+</ul>
+
+<h2>16. Заключение</h2>
+
+<p>Приложение представляет собой полнофункциональный 3D редактор для работы с планами зданий. Основные возможности:</p>
+
+<ul>
+    <li>✅ Загрузка и отображение нескольких 3D моделей</li>
+    <li>✅ Интерактивное позиционирование и масштабирование моделей</li>
+    <li>✅ Система меток с визуальным редактором</li>
+    <li>✅ Управление камерой для навигации</li>
+    <li>✅ Сохранение и загрузка конфигурации (модели + метки)</li>
+    <li>✅ Автоматическое расширение плана под модели</li>
+    <li>✅ Отключение управления при работе с метками</li>
+</ul>
+
+<p>Код структурирован, документирован и легко расширяется для добавления новых функций.</p>
+
+<div class="important">
+<strong>Версия документации:</strong> 2.0<br>
+<strong>Дата обновления:</strong> 2026-02-06<br>
+<strong>Примечание:</strong> Подробная документация также доступна в файле <code>Техническая_Документация.md</code>
+</div>
+
+</body>
+</html>
