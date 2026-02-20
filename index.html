@@ -21,26 +21,94 @@
       <div class="hud">
         <div class="title">3D Model</div>
         <div class="hint">Drag to orbit • Scroll to zoom • Arrows/WASD to fly • Space/Shift to move up/down • 1-9 select model • Q/E rotate model • In Position Mode: Arrows move, Space/Shift lift/lower</div>
-        <button id="togglePlanBtn" class="export-btn">Hide Plan</button>
-        <button id="exportBtn" class="export-btn">Export to OBJ</button>
         <button id="positionModeBtn" class="export-btn">Position Mode: Off</button>
         <button id="exportPositionsBtn" class="export-btn">Export Positions</button>
+        <button id="addLabelModeBtn" class="export-btn">Add Label Mode: Off</button>
+        <button id="showLabelsPanelBtn" class="export-btn">Show Labels</button>
+        <button id="downloadLabelsBtn" class="export-btn">Download Labels</button>
+        <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">
+          <div style="font-size: 11px; margin-bottom: 4px;">Этажи здания:</div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button id="floorDownBtn" class="export-btn" style="width: 40px;">-</button>
+            <span id="floorDisplay" style="font-size: 11px; min-width: 80px; text-align: center;">Этаж 1</span>
+            <button id="floorUpBtn" class="export-btn" style="width: 40px;">+</button>
+            <button id="floorResetBtn" class="export-btn" style="width: 60px; margin-left: 4px;">Все</button>
+          </div>
+        </div>
         <div style="margin-top: 8px;">
           <label id="scaleLabel" style="display: block; margin-bottom: 4px; font-size: 11px;">Масштаб модели (Model 1):</label>
           <div style="margin-bottom: 6px;">
             <label style="font-size: 10px; display: inline-block; width: 20px;">X:</label>
-            <input type="range" id="modelScaleXSlider" min="0.1" max="3" step="0.01" value="1" style="width: 150px;">
+            <input type="range" id="modelScaleXSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
             <span id="scaleXValue" style="margin-left: 8px; font-size: 10px;">100%</span>
           </div>
           <div style="margin-bottom: 6px;">
             <label style="font-size: 10px; display: inline-block; width: 20px;">Y:</label>
-            <input type="range" id="modelScaleYSlider" min="0.1" max="3" step="0.01" value="1" style="width: 150px;">
+            <input type="range" id="modelScaleYSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
             <span id="scaleYValue" style="margin-left: 8px; font-size: 10px;">100%</span>
           </div>
           <div style="margin-bottom: 6px;">
             <label style="font-size: 10px; display: inline-block; width: 20px;">Z:</label>
-            <input type="range" id="modelScaleZSlider" min="0.1" max="3" step="0.01" value="1" style="width: 150px;">
+            <input type="range" id="modelScaleZSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
             <span id="scaleZValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Панель управления метками -->
+      <div id="labelsPanel" class="labels-panel" style="display: none;">
+        <div class="labels-panel-header">
+          <div class="labels-panel-title">Метки</div>
+          <button id="closeLabelsPanelBtn" class="close-btn">×</button>
+        </div>
+        <div class="labels-panel-content">
+          <div id="labelsList" class="labels-list"></div>
+          <div class="labels-panel-footer">
+            <div class="label-hint">Включите "Add Label Mode" и кликните на модель или сцену для добавления метки</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Модальное окно для редактирования метки -->
+      <div id="labelEditModal" class="modal" style="display: none;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="modalTitle">Редактировать метку</h3>
+            <button id="closeModalBtn" class="close-btn">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Текст метки:</label>
+              <input type="text" id="labelTextInput" placeholder="Введите текст метки" maxlength="50">
+            </div>
+            <div class="form-group">
+              <label>Цвет фона:</label>
+              <input type="color" id="labelColorInput" value="#4a9eff">
+            </div>
+            <div class="form-group">
+              <label>Цвет текста:</label>
+              <input type="color" id="labelTextColorInput" value="#ffffff">
+            </div>
+            <div class="form-group">
+              <label>Размер шрифта:</label>
+              <input type="range" id="labelFontSizeInput" min="10" max="24" value="14">
+              <span id="fontSizeValue">14px</span>
+            </div>
+            <div class="form-group">
+              <label>Высота над объектом:</label>
+              <input type="number" id="labelOffsetYInput" placeholder="Авто" step="10">
+            </div>
+            <div class="form-group">
+              <label>Привязать к модели:</label>
+              <select id="labelModelSelect">
+                <option value="">Не привязана</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="saveLabelBtn" class="export-btn">Сохранить</button>
+            <button id="deleteLabelBtn" class="export-btn delete-btn">Удалить</button>
+            <button id="cancelLabelBtn" class="export-btn cancel-btn">Отмена</button>
           </div>
         </div>
       </div>
