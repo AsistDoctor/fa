@@ -2,9 +2,18 @@ html,
 body {
   height: 100%;
   margin: 0;
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background: #111;
   color: #eee;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* Предотвращаем выделение текста на мобильных */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 #app {
@@ -24,14 +33,104 @@ canvas {
   position: absolute;
   left: 12px;
   top: 12px;
-  background: rgba(0, 0, 0, 0.55);
-  padding: 10px 12px;
-  border-radius: 6px;
+  background: #111;
+  padding: 0;
+  border-radius: 12px;
   font-size: 12px;
   line-height: 1.4;
   user-select: none;
   z-index: 100;
   pointer-events: auto;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  animation: shadowPulse 2s infinite ease-in-out;
+}
+
+@keyframes shadowPulse {
+  0% { box-shadow: 0 0 20px rgba(0, 0, 0, 0.8); }
+  50% { box-shadow: 0 0 40px black, 0 0 20px #333; }
+  100% { box-shadow: 0 0 20px rgba(0, 0, 0, 0.8); }
+}
+
+/* Заголовок аккордеона - всегда видимый */
+.hud-header {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  transition: background-color 0.2s ease;
+  position: relative;
+  z-index: 10;
+}
+
+.hud-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.hud-header-content {
+  flex: 1;
+}
+
+.hud-toggle-icon {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.hud.expanded .hud-toggle-icon {
+  transform: rotate(180deg);
+}
+
+/* Скрываемое содержимое */
+.hud-content {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+  padding: 0 12px;
+  position: relative;
+  z-index: 10;
+}
+
+.hud.expanded .hud-content {
+  max-height: 2000px;
+  opacity: 1;
+  padding: 0 12px 10px 12px;
+}
+
+/* Убираем padding у заголовка когда меню развернуто */
+.hud.expanded .hud-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+
+
+.hud .hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+
+.desktop-hint {
+  display: block;
+}
+
+.mobile-hint {
+  display: none !important;
 }
 
 .hud .title {
@@ -42,25 +141,58 @@ canvas {
 .export-btn {
   margin-top: 8px;
   padding: 6px 12px;
-  background: #4a9eff;
+  background: linear-gradient(135deg, #4a4a4a, #2a2a2a, #3a3a3a);
+  background-size: 200% 200%;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
   font-weight: 500;
-  transition: background 0.2s;
+  transition: background-position 0.3s ease, transform 0.1s;
   pointer-events: auto;
   position: relative;
   z-index: 101;
+  width: 100%;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: block; /* Убеждаемся, что кнопки блочные и не съезжают */
+  white-space: nowrap; /* Предотвращаем перенос текста */
+  text-align: center; /* Центрируем текст */
+  animation: buttonGradientShift 4s ease infinite;
+}
+
+@keyframes buttonGradientShift {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
 }
 
 .export-btn:hover {
-  background: #5aaeff;
+  background: linear-gradient(135deg, #5a5a5a, #3a3a3a, #4a4a4a);
+  background-size: 200% 200%;
+  background-position: 100% 100%;
 }
 
 .export-btn:active {
-  background: #3a8eef;
+  background: linear-gradient(135deg, #3a3a3a, #1a1a1a, #2a2a2a);
+  background-size: 200% 200%;
+  transform: scale(0.98);
+}
+
+/* Улучшенная поддержка touch для кнопок */
+@media (hover: none) and (pointer: coarse) {
+  .export-btn:hover {
+    background: linear-gradient(135deg, #5a5a5a, #3a3a3a, #4a4a4a);
+    background-size: 200% 200%;
+  }
+  
+  .export-btn:active {
+    background: linear-gradient(135deg, #3a3a3a, #1a1a1a, #2a2a2a);
+    background-size: 200% 200%;
+    transform: scale(0.95);
+  }
 }
 
 /* ========== СТИЛИ ДЛЯ МЕТОК (CSS2DRenderer) ========== */
@@ -91,6 +223,7 @@ canvas {
   right: 12px;
   top: 12px;
   width: 300px;
+  max-width: calc(100% - 24px);
   max-height: 80vh;
   background: rgba(0, 0, 0, 0.85);
   border-radius: 6px;
@@ -100,6 +233,8 @@ canvas {
   display: flex;
   flex-direction: column;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .labels-panel-header {
@@ -227,6 +362,7 @@ canvas {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-header {
@@ -311,3 +447,356 @@ canvas {
 .cancel-btn:hover {
   background: rgba(255, 255, 255, 0.3) !important;
 }
+
+/* ========== ПРОГРЕСС-БАР ЗАГРУЗКИ ========== */
+.loading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(17, 17, 17, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+}
+
+.loading-progress.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loading-progress-content {
+  text-align: center;
+  color: #eee;
+  max-width: 400px;
+  width: 90%;
+}
+
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(74, 158, 255, 0.2);
+  border-top-color: #4a9eff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  color: #eee;
+}
+
+.loading-bar-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.loading-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4a9eff, #5aaeff);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+}
+
+.loading-status {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+/* Адаптивность для мобильных */
+@media screen and (max-width: 768px) {
+  .loading-text {
+    font-size: 16px;
+  }
+  
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border-width: 3px;
+  }
+  
+  .loading-status {
+    font-size: 12px;
+  }
+}
+
+/* ========== АДАПТИВНЫЕ СТИЛИ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ ========== */
+
+/* Большие экраны (десктопы) - убеждаемся что кнопки не съезжают */
+@media screen and (min-width: 1025px) {
+  .hud {
+    min-width: 200px; /* Минимальная ширина для HUD на больших экранах */
+    max-width: 350px; /* Максимальная ширина для HUD на больших экранах */
+  }
+  
+  .export-btn {
+    width: 100%;
+    min-width: 0; /* Позволяем кнопкам быть гибкими */
+  }
+  
+  /* Кнопки этажей должны оставаться в строке и не растягиваться */
+  .hud > div[style*="display: flex"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+  }
+  
+  /* Кнопки внутри flex-контейнера не должны растягиваться на всю ширину */
+  .hud > div[style*="display: flex"] .export-btn {
+    width: auto !important; /* Отменяем width: 100% для кнопок в строке */
+    flex-shrink: 0; /* Не сжимаем кнопки */
+    margin-left: 0; /* Убираем лишние отступы */
+  }
+  
+  /* Кнопка "Все" должна сохранять свою ширину */
+  .hud > div[style*="display: flex"] .export-btn[style*="width: 60px"] {
+    width: 60px !important;
+  }
+  
+  /* Кнопки +/- должны сохранять свою ширину */
+  .hud > div[style*="display: flex"] .export-btn[style*="width: 40px"] {
+    width: 40px !important;
+  }
+}
+
+/* Планшеты и маленькие десктопы */
+@media screen and (max-width: 1024px) {
+  .hud {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+  
+  .hud .title {
+    font-size: 14px;
+  }
+  
+  .labels-panel {
+    width: 280px;
+  }
+}
+
+/* Мобильные устройства (планшеты в портретной ориентации) */
+@media screen and (max-width: 768px) {
+  .hud {
+    left: 8px;
+    top: 8px;
+    padding: 8px;
+    font-size: 10px;
+    max-width: calc(100% - 16px);
+  }
+  
+  .hud .title {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  
+  .hud .hint {
+    font-size: 9px;
+    line-height: 1.2;
+  }
+  
+  .desktop-hint {
+    display: none !important;
+  }
+  
+  .mobile-hint {
+    display: block !important;
+  }
+  
+  .export-btn {
+    padding: 8px 10px;
+    font-size: 10px;
+    margin-top: 6px;
+  }
+  
+  .labels-panel {
+    right: 8px;
+    top: 8px;
+    width: calc(100% - 16px);
+    max-width: none;
+    max-height: calc(100vh - 16px);
+  }
+  
+  .modal-content {
+    width: 95%;
+    max-width: none;
+    margin: 8px;
+  }
+  
+  /* Уменьшаем размеры слайдеров на мобильных */
+  .hud input[type="range"] {
+    width: 120px !important;
+  }
+  
+  .hud span {
+    font-size: 9px !important;
+  }
+}
+
+/* Маленькие мобильные устройства */
+@media screen and (max-width: 480px) {
+  .hud {
+    left: 4px;
+    top: 4px;
+    padding: 6px;
+    font-size: 9px;
+    max-width: calc(100% - 8px);
+  }
+  
+  .hud .title {
+    font-size: 12px;
+  }
+  
+  .hud .hint {
+    font-size: 8px;
+  }
+  
+  .export-btn {
+    padding: 6px 8px;
+    font-size: 9px;
+    margin-top: 4px;
+  }
+  
+  .labels-panel {
+    right: 4px;
+    top: 4px;
+    width: calc(100% - 8px);
+    max-height: calc(100vh - 8px);
+  }
+  
+  .modal-content {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+  
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 12px;
+  }
+  
+  /* Еще больше уменьшаем слайдеры */
+  .hud input[type="range"] {
+    width: 100px !important;
+  }
+  
+  /* Компактное отображение этажей */
+  .hud > div[style*="margin-top"] {
+    margin-top: 6px !important;
+    padding-top: 6px !important;
+  }
+  
+  .hud > div[style*="margin-top"] > div {
+    font-size: 9px !important;
+  }
+  
+  .hud > div[style*="margin-top"] button {
+    width: 35px !important;
+    padding: 4px !important;
+    font-size: 9px !important;
+  }
+}
+
+/* Ландшафтная ориентация на мобильных */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+  .hud {
+    max-height: calc(100vh - 8px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .labels-panel {
+    max-height: calc(100vh - 8px);
+  }
+}
+
+/* Высокое разрешение (Retina) */
+@media screen and (-webkit-min-device-pixel-ratio: 2),
+       screen and (min-resolution: 192dpi) {
+  .hud,
+  .labels-panel,
+  .modal-content {
+    border-width: 0.5px;
+  }
+}
+
+/* Поддержка темной темы системы */
+@media (prefers-color-scheme: dark) {
+  /* Уже используем темную тему по умолчанию */
+}
+
+/* Поддержка уменьшенной анимации (доступность) */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Улучшенная поддержка touch-устройств */
+@media (hover: none) and (pointer: coarse) {
+  .export-btn {
+    min-height: 44px; /* Минимальный размер для удобного нажатия */
+  }
+  
+  .close-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .label-item-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
+  }
+  
+  /* Увеличиваем область клика для меток */
+  .label {
+    padding: 10px 14px;
+    min-height: 44px;
+  }
+}
+
+/* Оптимизация для очень маленьких экранов */
+@media screen and (max-width: 360px) {
+  .hud {
+    font-size: 8px;
+    padding: 4px;
+  }
+  
+  .hud .title {
+    font-size: 11px;
+  }
+  
+  .export-btn {
+    padding: 5px 6px;
+    font-size: 8px;
+  }
+}
+

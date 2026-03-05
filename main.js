@@ -1,7 +1,11 @@
-// ========== THREE.JS VERSION (ES Modules) ==========
-// Использует Three.js из node_modules через importmap
+// ====================================================================================
+// БЛОК 1: ИМПОРТЫ И ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+// ====================================================================================
+// Импортируем Three.js и необходимые модули для работы с 3D графикой
+// OBJLoader - для загрузки 3D моделей в формате .obj
+// OrbitControls - для управления камерой (вращение, масштабирование)
+// CSS2DRenderer - для отображения HTML меток в 3D пространстве
 
-// Импортируем Three.js и модули
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -11,6 +15,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 console.log('✓ Three.js загружен из node_modules');
 
 // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+// Хранят состояние приложения: активная модель, режимы работы, метки, камера и т.д.
 let activeModel = 1;
 let positionMode = false;
 let addLabelMode = false;
@@ -38,6 +43,28 @@ let currentFloor = 0; // 0 = все этажи, 1+ = конкретный эта
 let floorHeight = 3.5; // Высота одного этажа в единицах 3D (метры)
 let buildingFloors = {}; // Количество этажей для каждого здания {model1: 5, model2: 3, ...}
 let floorViewMode = false; // Режим просмотра этажа (орто-камера сверху)
+
+// Список файлов моделей (глобальная переменная)
+const modelFiles = [
+  "models/11111.obj",
+  "models/2к 3D.obj",
+  "models/3к 3D.obj",
+  "models/4к 3D.obj",
+  "models/5к.obj",
+  "models/6к.obj",
+  "models/7к.obj",
+  "models/highway road.obj",  // Дорога
+  "models/blueCorp.obj",  // Синий корпус
+];
+
+// Глобальные константы для размеров плана (используются в loadAllModels)
+const PLAN_SIZE = 220 * 5; // 1100 (базовый размер, используется для масштабирования моделей)
+
+// ====================================================================================
+// БЛОК 2: ФУНКЦИИ ПРОВЕРКИ ВИДИМОСТИ МЕТОК
+// ====================================================================================
+// Использует raycasting для определения, не перекрыта ли метка зданием
+// Если между камерой и меткой есть здание - метка скрывается
 
 /**
  * Проверяет видимость метки (не перекрыта ли зданием)
@@ -148,36 +175,35 @@ function updateLabelsPanel() {
 // Делаем функцию доступной глобально
 window.updateLabelsPanel = updateLabelsPanel;
 
-// Функция инициализации приложения
+// ====================================================================================
+// БЛОК 3: ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
+// ====================================================================================
+// Основная функция, которая настраивает всю 3D сцену: камеру, освещение, пол, сетку
+// Вызывается один раз при загрузке страницы
+
 function initApp() {
+  console.log("🦆═══════════════════════════════════════════════════════🦆");
+  console.log("🦆🚀 НАЧАЛО initApp() 🦆");
+  console.log("🦆═══════════════════════════════════════════════════════🦆");
 
   // ========== КОНСТАНТЫ ==========
-const PLAN_SIZE = 220 * 5; // 1100 (базовый размер, используется для масштабирования моделей)
-// План будет расширен динамически на основе позиций моделей
-let PLAN_TEXTURE_SIZE = PLAN_SIZE * 1.35; // Начальный размер, будет пересчитан
-const PLAN_Y = -PLAN_SIZE * 0.03;
-const POSITION_STEP = PLAN_SIZE * 0.01;
-const ROTATION_STEP = Math.PI / 36;
-
-// Список файлов моделей
-const modelFiles = [
-  "models/11111.obj",
-  "models/2к 3D.obj",
-  "models/3к 3D.obj",
-  "models/4к 3D.obj",
-  "models/5к.obj",
-  "models/6к.obj",
-  "models/7к.obj",
-  "models/highway road.obj",  // Дорога
-  "models/blueCorp.obj",  // Синий корпус
-];
+  // Размеры плана, шаги перемещения и поворота моделей
+  // PLAN_SIZE теперь глобальная константа (определена выше)
+  // План будет расширен динамически на основе позиций моделей
+  let PLAN_TEXTURE_SIZE = PLAN_SIZE * 1.35; // Начальный размер, будет пересчитан
+  const PLAN_Y = -PLAN_SIZE * 0.03;
+  const POSITION_STEP = PLAN_SIZE * 0.01;
+  const ROTATION_STEP = Math.PI / 36;
 
 // ========== ИНИЦИАЛИЗАЦИЯ СЦЕНЫ ==========
+// Создаем 3D сцену, камеру, WebGL рендерер для отрисовки моделей
+console.log("🦆 Ищем canvas элемент... 🦆");
 canvas = document.querySelector("#c");
 if (!canvas) {
-  console.error("Canvas не найден!");
+  console.error("🦆✗ Canvas не найден! 🦆");
   return; // Выходим если canvas не найден
 }
+console.log("🦆✓ Canvas найден 🦆");
 
 scene = new THREE.Scene();
 scene.background = new THREE.Color(0xe0e0e0);
@@ -202,10 +228,17 @@ renderer = new THREE.WebGLRenderer({
   powerPreference: "high-performance"
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Определяем мобильное устройство для оптимизации pixel ratio
+const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+                      (window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
+const initialPixelRatio = isMobileDevice 
+                         ? Math.min(window.devicePixelRatio, 1.5) 
+                         : Math.min(window.devicePixelRatio, 2);
+renderer.setPixelRatio(initialPixelRatio);
 renderer.shadowMap.enabled = false;
 
 // ========== CSS2DRenderer ДЛЯ МЕТОК ==========
+// Отдельный рендерер для HTML меток, которые отображаются поверх 3D сцены
 labelRenderer = new CSS2DRenderer();
 labelRenderer.setSize(window.innerWidth, window.innerHeight);
 labelRenderer.domElement.style.position = 'absolute';
@@ -215,6 +248,8 @@ labelRenderer.domElement.style.pointerEvents = 'none'; // Позволяет к�
 document.getElementById('app').appendChild(labelRenderer.domElement);
 
 // ========== УПРАВЛЕНИЕ КАМЕРОЙ ==========
+// OrbitControls позволяет вращать камеру мышью, масштабировать колесиком
+// Дополнительно настроено управление с клавиатуры (WASD, стрелки)
 controls = new OrbitControls(camera, canvas);
 controls.target.set(0, 2, -10);
 controls.enableDamping = true;
@@ -223,6 +258,26 @@ controls.minDistance = 60;
 controls.maxDistance = 2000;
 controls.maxPolarAngle = Math.PI * 0.6;
 controls.minPolarAngle = 0.2;
+
+// Оптимизация для мобильных устройств (используем уже определенную переменную)
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+if (isMobileDevice || isTouchDevice) {
+  // Улучшенные настройки для touch-устройств
+  controls.enablePan = true;
+  controls.touches = {
+    ONE: THREE.TOUCH.ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN
+  };
+  controls.panSpeed = 0.8;
+  controls.rotateSpeed = 0.5;
+  controls.zoomSpeed = 0.8;
+  
+  // Уменьшаем минимальное расстояние для лучшего обзора на маленьких экранах
+  controls.minDistance = 40;
+  
+  console.log("✓ Мобильные оптимизации активированы");
+}
 
 // Сохраняем ссылку на controls для доступа из других функций
 if (canvas) {
@@ -247,6 +302,7 @@ let keys = {
 };
 
 // ========== ОСВЕЩЕНИЕ ==========
+// Настраиваем освещение сцены: окружающий свет + направленный свет для реалистичности
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);  // Увеличена яркость
 scene.add(ambientLight);
 
@@ -260,6 +316,8 @@ topLight.position.set(0, 1, 0);
 scene.add(topLight);
 
 // ========== ПОЛ И СЕТКА ==========
+// Создаем плоскость пола и сетку для ориентации в пространстве
+// Пол автоматически расширяется под все модели
 let showPlan = true;
 let floor = null;
 let gridHelper = null;
@@ -371,8 +429,10 @@ function expandFloorToFitModels() {
 }
 
 createFloor();
+console.log("🦆✓ Пол создан 🦆");
 
 // ========== ЗАГРУЗКА МОДЕЛЕЙ ==========
+console.log("🦆 Инициализируем массивы для моделей... 🦆");
 const loadedModels = [];
 
 // Сохраняем глобальную ссылку на массив моделей для функций проверки видимости
@@ -382,9 +442,12 @@ const modelRotations = {};
 const modelHeights = {};
 const initialModelScales = {}; // Начальные масштабы для ползунка
 
+console.log("🦆 Создаем OBJLoader... 🦆");
 const loader = new OBJLoader();
+console.log("🦆✓ OBJLoader создан 🦆");
 
 // Инициализация позиций по умолчанию
+console.log(`🦆 Инициализируем позиции для ${modelFiles.length} моделей... 🦆`);
 for (let i = 0; i < modelFiles.length; i++) {
   const modelKey = `model${i + 1}`;
   modelOffsets[modelKey] = {
@@ -394,16 +457,156 @@ for (let i = 0; i < modelFiles.length; i++) {
   };
   modelRotations[modelKey] = { yaw: 0 };
 }
+console.log("🦆✓ Позиции инициализированы 🦆");
 
-// Загрузка всех моделей
-async function loadAllModels() {
-  console.log("Начинаем загрузку моделей...");
+// Загружаем модели после инициализации
+console.log("🦆═══════════════════════════════════════════════════════🦆");
+console.log("🦆🚀 ВЫЗОВ loadAllModels()... 🦆");
+console.log(`🦆  modelFiles доступен: ${typeof modelFiles !== 'undefined'} 🦆`);
+console.log(`🦆  loader доступен: ${typeof loader !== 'undefined'} 🦆`);
+console.log(`🦆  scene доступен: ${typeof scene !== 'undefined'} 🦆`);
+console.log("🦆═══════════════════════════════════════════════════════🦆");
+
+try {
+  console.log("🦆 Пытаемся вызвать loadAllModels()... 🦆");
+  const loadPromise = loadAllModels();
+  console.log("🦆✓ loadAllModels() вызвана, промис получен 🦆");
+  loadPromise.catch((error) => {
+    console.error("🦆✗ Необработанная ошибка в loadAllModels():", error, "🦆");
+  });
+} catch (error) {
+  console.error("🦆✗ ОШИБКА при вызове loadAllModels():", error, "🦆");
+}
+
+// Расширяем план под все модели после применения позиций (вызываем один раз)
+// Используем небольшую задержку, чтобы убедиться, что все модели позиционированы
+console.log("🦆 Настраиваем setTimeout для расширения плана... 🦆");
+setTimeout(() => {
+  expandFloorToFitModels();
   
-  const loadPromises = modelFiles.map((file, index) => {
+  // Загружаем сохраненные метки
+  loadLabelsFromJSON();
+}, 500);
+
+// ====================================================================================
+// БЛОК 4: ЗАГРУЗКА И ОБРАБОТКА 3D МОДЕЛЕЙ
+// ====================================================================================
+// Загружает .obj файлы моделей корпусов, применяет материалы, масштабирует
+// Автоматически определяет количество этажей для каждого здания
+// Ограничивает этажи до 4 для всех корпусов, кроме самого большого
+
+// ====================================================================================
+// БЛОК 4.1: УПРАВЛЕНИЕ ПРОГРЕССОМ ЗАГРУЗКИ
+// ====================================================================================
+function updateLoadingProgress(loaded, total, modelName = '') {
+  const progressBar = document.getElementById('loadingBar');
+  const progressStatus = document.getElementById('loadingStatus');
+  const loadingText = document.querySelector('.loading-text');
+  
+  // Вычисляем процент заранее, чтобы использовать в логировании
+  const percentage = Math.round((loaded / total) * 100);
+  
+  if (progressBar && progressStatus) {
+    progressBar.style.width = `${percentage}%`;
+    
+    // Добавляем уточку в статус с разными состояниями
+    let duckEmoji = '🦆';
+    if (percentage === 0) duckEmoji = '🦆';
+    else if (percentage < 25) duckEmoji = '🦆';
+    else if (percentage < 50) duckEmoji = '🦆';
+    else if (percentage < 75) duckEmoji = '🦆';
+    else if (percentage < 100) duckEmoji = '🦆';
+    else duckEmoji = '🦆✓';
+    
+    progressStatus.textContent = `${percentage}% ${duckEmoji}`;
+    
+    if (loadingText && modelName) {
+      loadingText.textContent = `🦆 Загрузка: ${modelName} 🦆`;
+    } else if (loadingText) {
+      loadingText.textContent = `🦆 Загрузка 3D карты... 🦆`;
+    }
+  }
+  
+  // Логируем в консоль для отладки
+  console.log(`🦆 Прогресс загрузки: ${loaded}/${total} (${percentage}%) ${modelName ? '- ' + modelName : ''} 🦆`);
+}
+
+function showLoadingProgress() {
+  console.log("🦆 Показываем прогресс-бар загрузки 🦆");
+  const loadingProgress = document.getElementById('loadingProgress');
+  if (loadingProgress) {
+    loadingProgress.style.display = 'flex';
+    loadingProgress.classList.remove('hidden');
+    updateLoadingProgress(0, modelFiles.length, '🦆 Инициализация... 🦆');
+    console.log("🦆✓ Прогресс-бар отображен 🦆");
+  } else {
+    console.error("🦆✗ Элемент loadingProgress не найден! 🦆");
+  }
+}
+
+function hideLoadingProgress() {
+  console.log("🦆 Скрываем прогресс-бар загрузки 🦆");
+  const loadingProgress = document.getElementById('loadingProgress');
+  if (loadingProgress) {
+    loadingProgress.classList.add('hidden');
+    setTimeout(() => {
+      loadingProgress.style.display = 'none';
+      console.log("🦆✓ Прогресс-бар скрыт 🦆");
+    }, 500);
+  } else {
+    console.warn("🦆⚠ Элемент loadingProgress не найден при скрытии 🦆");
+  }
+}
+
+// ====================================================================================
+// БЛОК 4: ЗАГРУЗКА И ОБРАБОТКА 3D МОДЕЛЕЙ (С ЛЕНИВОЙ ЗАГРУЗКОЙ)
+// ====================================================================================
+// Загружает .obj файлы моделей корпусов с ленивой загрузкой
+// Приоритетная загрузка первых моделей, остальные загружаются постепенно
+// Автоматически определяет количество этажей для каждого здания
+
+async function loadAllModels() {
+  console.log("🦆 Начинаем ленивую загрузку моделей... 🦆");
+  
+  // Проверяем, что modelFiles доступен
+  if (!modelFiles || modelFiles.length === 0) {
+    console.error("🦆✗ modelFiles не определен или пуст! 🦆");
+    hideLoadingProgress();
+    return;
+  }
+  
+  console.log(`🦆✓ Найдено моделей для загрузки: ${modelFiles.length} 🦆`);
+  
+  // Показываем прогресс-бар
+  showLoadingProgress();
+  
+  const PRIORITY_COUNT = 3; // Количество моделей для приоритетной загрузки
+  const BATCH_SIZE = 2; // Количество моделей для загрузки одновременно после приоритетных
+  const BATCH_DELAY = 300; // Задержка между батчами (мс)
+  
+  let loadedCount = 0;
+  const totalModels = modelFiles.length;
+  
+  // Проверяем, что loader доступен
+  if (!loader) {
+    console.error("🦆✗ OBJLoader не инициализирован! 🦆");
+    hideLoadingProgress();
+    return;
+  }
+  
+  console.log("🦆✓ OBJLoader доступен, начинаем загрузку моделей 🦆");
+  
+  // Функция для загрузки одной модели
+  const loadSingleModel = (file, index) => {
     return new Promise((resolve, reject) => {
+      console.log(`🦆    → Запрос загрузки модели ${index + 1}: ${file} 🦆`);
+      const startTime = performance.now();
+      
       loader.load(
         file,
         (object) => {
+          const loadTime = ((performance.now() - startTime) / 1000).toFixed(2);
+          console.log(`🦆    ✓ Модель ${index + 1} загружена за ${loadTime}с: ${file} 🦆`);
           try {
             // Вычисляем границы модели
             const box = new THREE.Box3().setFromObject(object);
@@ -434,10 +637,9 @@ async function loadAllModels() {
                 const geometry = child.geometry;
                 
                 // Всегда пересчитываем нормали для правильного отображения
-                // Используем более агрессивный алгоритм для исправления проблем
-                geometry.computeVertexNormals(true);  // true = использовать углы граней для весов
+                geometry.computeVertexNormals(true);
                 
-                // Для первой модели добавляем детальное логирование и дополнительные исправления
+                // Для первой модели добавляем детальное логирование
                 if (index === 0) {
                   console.log(`Модель 1 (${file}): детальная информация:`);
                   const initialVertexCount = geometry.attributes.position.count;
@@ -447,12 +649,10 @@ async function loadAllModels() {
                     console.log(`  Индексов: ${geometry.index.count}`);
                   }
                   
-                  // Проверяем геометрию на проблемы
                   geometry.computeBoundingBox();
                   const bbox = geometry.boundingBox;
                   console.log(`  Размеры: ${bbox.max.x - bbox.min.x} x ${bbox.max.y - bbox.min.y} x ${bbox.max.z - bbox.min.z}`);
                   
-                  // Убеждаемся, что геометрия валидна
                   if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) {
                     console.warn(`  ВНИМАНИЕ: Нормали отсутствуют после обработки!`);
                     geometry.computeVertexNormals(true);
@@ -463,12 +663,12 @@ async function loadAllModels() {
                 
                 // Применяем материал с улучшенными настройками
                 child.material = new THREE.MeshStandardMaterial({
-                  color: 0xdddddd,  // Ещё более светлый цвет для лучшей видимости
-                  side: THREE.DoubleSide,  // Рендерить обе стороны граней (важно для исправления прозрачности)
-                  flatShading: false,  // Плавное затенение
+                  color: 0xdddddd,
+                  side: THREE.DoubleSide,
+                  flatShading: false,
                   vertexColors: false,
-                  metalness: 0.1,  // Небольшая металличность
-                  roughness: 0.7   // Средняя шероховатость для лучшего отражения света
+                  metalness: 0.1,
+                  roughness: 0.7
                 });
               }
             });
@@ -479,7 +679,6 @@ async function loadAllModels() {
             modelHeights[modelKey] = height;
             
             // Позиции будут применены из JSON после загрузки всех моделей
-            // Пока используем базовую позицию Y (выравнивание по полу)
             object.position.y = MODEL_LIFT;
             
             loadedModels[index] = object;
@@ -496,40 +695,158 @@ async function loadAllModels() {
             const estimatedFloors = Math.max(1, Math.floor(height / floorHeight));
             buildingFloors[modelKey] = estimatedFloors;
             
-            console.log(`✓ Модель ${index + 1} (${file}) загружена, высота: ${height.toFixed(2)}`);
-            console.log(`  → Определено этажей: ${estimatedFloors} (высота: ${height.toFixed(2)}, высота этажа: ${floorHeight})`);
+            loadedCount++;
+            updateLoadingProgress(loadedCount, totalModels, `🦆 Модель ${index + 1} 🦆`);
+            
+            console.log(`🦆✓ Модель ${index + 1} (${file}) загружена, высота: ${height.toFixed(2)} 🦆`);
+            console.log(`🦆  → Определено этажей: ${estimatedFloors} (высота: ${height.toFixed(2)}, высота этажа: ${floorHeight}) 🦆`);
             
             resolve(object);
           } catch (error) {
-            console.error(`Ошибка обработки модели ${index + 1}:`, error);
+            console.error(`🦆 Ошибка обработки модели ${index + 1}:`, error, "🦆");
+            loadedCount++;
+            updateLoadingProgress(loadedCount, totalModels);
             reject(error);
           }
         },
-        undefined,
+        (progress) => {
+          // Логируем прогресс загрузки для больших файлов
+          if (progress.lengthComputable) {
+            const percent = Math.round((progress.loaded / progress.total) * 100);
+            console.log(`    → Прогресс загрузки модели ${index + 1}: ${percent}% (${file})`);
+          }
+        },
         (error) => {
-          console.error(`✗ Ошибка загрузки модели ${index + 1} (${file}):`, error);
+          const loadTime = ((performance.now() - startTime) / 1000).toFixed(2);
+          console.error(`🦆✗ Ошибка загрузки модели ${index + 1} (${file}) за ${loadTime}с:`, error, "🦆");
+          console.error(`🦆  Детали ошибки:`, {
+            message: error.message,
+            type: error.type,
+            target: error.target?.src || error.target?.url || 'неизвестно'
+          }, "🦆");
+          loadedCount++;
+          updateLoadingProgress(loadedCount, totalModels);
           reject(error);
         }
       );
     });
-  });
+  };
   
   try {
-    const results = await Promise.allSettled(loadPromises);
-    const loadedCount = results.filter(r => r.status === 'fulfilled').length;
-    console.log(`Загружено моделей: ${loadedCount}/${modelFiles.length}`);
+    // Шаг 1: Приоритетная загрузка первых моделей (параллельно)
+    console.log(`🦆 Приоритетная загрузка первых ${PRIORITY_COUNT} моделей... 🦆`);
+    const priorityFiles = modelFiles.slice(0, PRIORITY_COUNT);
+    console.log(`🦆  Файлы для приоритетной загрузки:`, priorityFiles, "🦆");
+    
+    const priorityPromises = priorityFiles.map((file, index) => {
+      console.log(`  [${index + 1}/${PRIORITY_COUNT}] Начинаем загрузку: ${file}`);
+      return loadSingleModel(file, index);
+    });
+    
+    const priorityResults = await Promise.allSettled(priorityPromises);
+    console.log(`🦆  Результаты приоритетной загрузки:`, priorityResults.map((r, i) => ({
+      file: priorityFiles[i],
+      status: r.status,
+      error: r.status === 'rejected' ? r.reason : null
+    })), "🦆");
+    
+    // Шаг 2: Ленивая загрузка остальных моделей батчами
+    const remainingModels = modelFiles.slice(PRIORITY_COUNT);
+    console.log(`🦆 Ленивая загрузка остальных ${remainingModels.length} моделей батчами по ${BATCH_SIZE}... 🦆`);
+    
+    for (let i = 0; i < remainingModels.length; i += BATCH_SIZE) {
+      const batch = remainingModels.slice(i, i + BATCH_SIZE);
+      const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(remainingModels.length / BATCH_SIZE);
+      console.log(`🦆  Батч ${batchIndex}/${totalBatches}: загрузка ${batch.length} моделей 🦆`);
+      console.log(`🦆    Файлы:`, batch, "🦆");
+      
+      const batchPromises = batch.map((file, batchLocalIndex) => {
+        const globalIndex = PRIORITY_COUNT + i + batchLocalIndex;
+        console.log(`    [${globalIndex + 1}/${totalModels}] Начинаем загрузку: ${file}`);
+        return loadSingleModel(file, globalIndex);
+      });
+      
+      const batchResults = await Promise.allSettled(batchPromises);
+      console.log(`🦆  Батч ${batchIndex} завершен:`, batchResults.map((r, bi) => ({
+        file: batch[bi],
+        status: r.status,
+        error: r.status === 'rejected' ? r.reason : null
+      })), "🦆");
+      
+      // Небольшая задержка между батчами для плавности
+      if (i + BATCH_SIZE < remainingModels.length) {
+        console.log(`🦆  Пауза ${BATCH_DELAY}мс перед следующим батчем... 🦆`);
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+      }
+    }
+    
+    const finalLoadedCount = loadedModels.filter(m => m !== null && m !== undefined).length;
+    const successCount = loadedModels.filter(m => m !== null && m !== undefined).length;
+    const failedCount = totalModels - successCount;
+    
+    console.log(`🦆═══════════════════════════════════════════════════════🦆`);
+    console.log(`🦆📊 ИТОГИ ЗАГРУЗКИ МОДЕЛЕЙ: 🦆`);
+    console.log(`🦆  Всего моделей: ${totalModels} 🦆`);
+    console.log(`🦆  ✓ Успешно загружено: ${successCount} 🦆`);
+    console.log(`🦆  ✗ Ошибок загрузки: ${failedCount} 🦆`);
+    console.log(`🦆═══════════════════════════════════════════════════════🦆`);
+    
+    if (failedCount > 0) {
+      console.warn(`🦆⚠ ВНИМАНИЕ: ${failedCount} моделей не загружено! 🦆`);
+      for (let i = 0; i < loadedModels.length; i++) {
+        if (!loadedModels[i]) {
+          console.warn(`🦆  - Модель ${i + 1} (${modelFiles[i]}) не загружена 🦆`);
+        }
+      }
+    }
+    
+    // Находим самое большое здание (по высоте) для исключения из ограничения этажей
+    let maxHeight = 0;
+    let tallestBuildingKey = null;
+    for (const modelKey in modelHeights) {
+      if (modelHeights[modelKey] > maxHeight) {
+        maxHeight = modelHeights[modelKey];
+        tallestBuildingKey = modelKey;
+      }
+    }
+    
+    // Ограничиваем количество этажей до 4 для всех зданий, кроме самого большого
+    for (const modelKey in buildingFloors) {
+      if (modelKey !== tallestBuildingKey && buildingFloors[modelKey] > 4) {
+        console.log(`  → Ограничено этажей для ${modelKey}: ${buildingFloors[modelKey]} → 4`);
+        buildingFloors[modelKey] = 4;
+      }
+    }
+    
+    if (tallestBuildingKey) {
+      console.log(`✓ Самое большое здание: ${tallestBuildingKey} (${buildingFloors[tallestBuildingKey]} этажей)`);
+    }
+    
+    // Скрываем прогресс-бар после завершения загрузки
+    updateLoadingProgress(totalModels, totalModels, 'Завершено');
+    setTimeout(() => {
+      hideLoadingProgress();
+    }, 500);
     
     // Применяем позиции из JSON (нормализация высоты отключена)
     setTimeout(async () => {
-      // normalizeModelHeights();  // Отключено - не растягиваем модели под новые
       await loadModelPositions();
     }, 500);
   } catch (error) {
-    console.error("Ошибка при загрузке моделей:", error);
+    console.error("🦆═══════════════════════════════════════════════════════🦆");
+    console.error("🦆✗ КРИТИЧЕСКАЯ ОШИБКА при загрузке моделей:", error, "🦆");
+    console.error("🦆  Стек ошибки:", error.stack, "🦆");
+    console.error("🦆═══════════════════════════════════════════════════════🦆");
+    hideLoadingProgress();
   }
 }
 
-// Нормализация высоты всех моделей
+// ====================================================================================
+// БЛОК 5: НОРМАЛИЗАЦИЯ ВЫСОТЫ МОДЕЛЕЙ (ОТКЛЮЧЕНО)
+// ====================================================================================
+// Функция для выравнивания высоты всех моделей (не используется, код закомментирован)
+/*
 function normalizeModelHeights() {
   let maxHeight = 0;
   for (const modelKey in modelHeights) {
@@ -564,8 +881,14 @@ function normalizeModelHeights() {
   
   console.log(`✓ Высота всех моделей нормализована`);
 }
+*/
 
-// Загрузка позиций из JSON
+// ====================================================================================
+// БЛОК 6: ЗАГРУЗКА И СОХРАНЕНИЕ ПОЗИЦИЙ МОДЕЛЕЙ
+// ====================================================================================
+// Загружает позиции, повороты и масштабы моделей из model_positions.json
+// Применяет сохраненные настройки к моделям после их загрузки
+
 async function loadModelPositions() {
   try {
     const response = await fetch("model_positions.json");
@@ -670,27 +993,13 @@ async function loadModelPositions() {
   } catch (error) {
     console.error("Ошибка загрузки позиций моделей:", error);
   }
-  
-  // Расширяем план под все модели после применения позиций (вызываем один раз)
-  // Используем небольшую задержку, чтобы убедиться, что все модели позиционированы
-  setTimeout(() => {
-    expandFloorToFitModels();
-    
-    // Загружаем сохраненные метки
-    loadLabelsFromJSON();
-  }, 500);
 }
 
-// Загружаем модели после инициализации
-loadAllModels();
-
-// Запускаем анимацию после инициализации
-animate();
-
-// Добавляем обработчик ресайза
-window.addEventListener("resize", resize);
-
-// ========== СОЗДАНИЕ МЕТОК (CSS2DRenderer) ==========
+// ====================================================================================
+// БЛОК 7: СИСТЕМА МЕТОК (CSS2DRenderer)
+// ====================================================================================
+// Создание, редактирование, удаление HTML меток в 3D пространстве
+// Метки привязываются к моделям или свободным позициям, сохраняются в JSON
 /**
  * Создает метку в 3D пространстве
  * @param {string} text - Текст метки
@@ -849,7 +1158,10 @@ function updateModelLabels(model) {
   });
 }
 
-// ========== УПРАВЛЕНИЕ МЕТКАМИ ЧЕРЕЗ UI ==========
+// ====================================================================================
+// БЛОК 8: UI ДЛЯ УПРАВЛЕНИЯ МЕТКАМИ
+// ====================================================================================
+// Модальные окна для редактирования меток: текст, цвет, размер шрифта, позиция
 /**
  * Создает новую метку в указанной позиции
  */
@@ -1117,8 +1429,15 @@ function downloadLabels() {
 /**
  * Загружает метки из model_positions.json или localStorage
  */
+// ====================================================================================
+// БЛОК 7.1: ЛЕНИВАЯ ЗАГРУЗКА МЕТОК
+// ====================================================================================
+// Загружает метки только после загрузки основных моделей
 async function loadLabelsFromJSON() {
   try {
+    // Небольшая задержка для оптимизации (метки загружаются после моделей)
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Сначала пытаемся загрузить из labels.json
     try {
       const response = await fetch("labels.json");
@@ -1266,7 +1585,11 @@ window.deleteLabelFromUI = function(labelId) {
   }
 };
 
-// ========== УПРАВЛЕНИЕ МОДЕЛЯМИ ==========
+// ====================================================================================
+// БЛОК 9: УПРАВЛЕНИЕ МОДЕЛЯМИ
+// ====================================================================================
+// Перемещение, поворот, масштабирование моделей через клавиатуру и UI
+// Режим позиционирования позволяет точно настраивать расположение корпусов
 function nudgeActiveModel(dx, dy, dz) {
   if (activeModel < 1 || activeModel > loadedModels.length) return;
   const model = loadedModels[activeModel - 1];
@@ -1368,135 +1691,6 @@ function updateScaleValue() {
   }
 }
 
-// ========== ОБРАБОТКА КЛАВИАТУРЫ ==========
-window.addEventListener("keydown", (event) => {
-  // Сброс камеры
-  if (event.key === "r" || event.key === "R") {
-    camera.position.set(0, 480, 480);  // Высота увеличена в 2 раза
-    controls.target.set(0, 2, -10);
-    controls.update();
-    return;
-  }
-  
-  // Переключение между моделями (1-9)
-  if (event.key >= "1" && event.key <= "9") {
-    const modelNum = parseInt(event.key);
-    if (modelNum >= 1 && modelNum <= loadedModels.length) {
-      activeModel = modelNum;
-      updatePositionModeLabel();  // Обновит и ползунок масштаба
-      
-      // Обновляем отображение этажей для новой активной модели
-      const floorDisplay = document.getElementById("floorDisplay");
-      if (floorDisplay) {
-        const modelKey = `model${activeModel}`;
-        const maxFloors = buildingFloors[modelKey] || 1;
-        if (currentFloor > maxFloors) {
-          currentFloor = maxFloors;
-        }
-        if (currentFloor === 0) {
-          floorDisplay.textContent = "Все этажи";
-        } else {
-          floorDisplay.textContent = `Этаж ${currentFloor} / ${maxFloors}`;
-        }
-      }
-    }
-    return;
-  }
-  
-  // В режиме позиционирования модели
-  if (positionMode) {
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      nudgeActiveModel(0, 0, -POSITION_STEP);
-      return;
-    } else if (event.key === "ArrowDown") {
-      event.preventDefault();
-      nudgeActiveModel(0, 0, POSITION_STEP);
-      return;
-    } else if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      nudgeActiveModel(-POSITION_STEP, 0, 0);  // Влево
-      return;
-    } else if (event.key === "ArrowRight") {
-      event.preventDefault();
-      nudgeActiveModel(POSITION_STEP, 0, 0);  // Вправо
-      return;
-    } else if (event.key === "q" || event.key === "Q") {
-      event.preventDefault();
-      rotateActiveModel(-ROTATION_STEP);
-      return;
-    } else if (event.key === "e" || event.key === "E") {
-      event.preventDefault();
-      rotateActiveModel(ROTATION_STEP);
-      return;
-    } else if (event.key === "PageUp" || event.key === " ") {
-      // Space или PageUp - поднять модель
-      event.preventDefault();
-      nudgeActiveModel(0, POSITION_STEP, 0);
-      return;
-    } else if (event.key === "PageDown" || event.key === "Shift") {
-      // Shift или PageDown - опустить модель
-      event.preventDefault();
-      nudgeActiveModel(0, -POSITION_STEP, 0);
-      return;
-    }
-  }
-  
-  // Управление камерой (когда не в режиме позиционирования)
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    keys.ArrowUp = true;
-  } else if (event.key === "ArrowDown") {
-    event.preventDefault();
-    keys.ArrowDown = true;
-  } else if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    keys.ArrowLeft = true;
-  } else if (event.key === "ArrowRight") {
-    event.preventDefault();
-    keys.ArrowRight = true;
-  } else if (event.key === "w" || event.key === "W") {
-    event.preventDefault();
-    keys.w = true;
-  } else if (event.key === "s" || event.key === "S") {
-    event.preventDefault();
-    keys.s = true;
-  } else if (event.key === "a" || event.key === "A") {
-    event.preventDefault();
-    keys.a = true;
-  } else if (event.key === "d" || event.key === "D") {
-    event.preventDefault();
-    keys.d = true;
-  } else if (event.key === " ") {
-    event.preventDefault();
-    keys.Space = true;
-  } else if (event.key === "Shift") {
-    event.preventDefault();
-    keys.Shift = true;
-  } else if (event.key === "PageUp") {
-    event.preventDefault();
-    keys.PageUp = true;
-  } else if (event.key === "PageDown") {
-    event.preventDefault();
-    keys.PageDown = true;
-  }
-});
-
-window.addEventListener("keyup", (event) => {
-  if (event.key === "ArrowUp") keys.ArrowUp = false;
-  else if (event.key === "ArrowDown") keys.ArrowDown = false;
-  else if (event.key === "ArrowLeft") keys.ArrowLeft = false;
-  else if (event.key === "ArrowRight") keys.ArrowRight = false;
-  else if (event.key === "w" || event.key === "W") keys.w = false;
-  else if (event.key === "s" || event.key === "S") keys.s = false;
-  else if (event.key === "a" || event.key === "A") keys.a = false;
-  else if (event.key === "d" || event.key === "D") keys.d = false;
-  else if (event.key === " ") keys.Space = false;
-  else if (event.key === "Shift") keys.Shift = false;
-  else if (event.key === "PageUp") keys.PageUp = false;
-  else if (event.key === "PageDown") keys.PageDown = false;
-});
-
 // Обновление движения камеры
 function updateCameraMovement() {
   if (positionMode) return;
@@ -1538,22 +1732,11 @@ function updateCameraMovement() {
   }
 }
 
-// Обновление вращения моделей
-function updateModelRotation() {
-  if (positionMode) return;
-  if (activeModel < 1 || activeModel > loadedModels.length) return;
-  
-  const rotationSpeed = ROTATION_STEP * 0.5;
-  
-  if (keys.q || keys.Q) {
-    rotateActiveModel(-rotationSpeed);
-  }
-  if (keys.e || keys.E) {
-    rotateActiveModel(rotationSpeed);
-  }
-}
 
-// ========== ЭКСПОРТ ==========
+// ====================================================================================
+// БЛОК 11: ЭКСПОРТ ДАННЫХ
+// ====================================================================================
+// Экспорт позиций моделей и меток в JSON файл для сохранения и загрузки
 function exportPositions() {
   const payload = {};
   
@@ -1679,7 +1862,10 @@ function exportToOBJ() {
   URL.revokeObjectURL(url);
 }
 
-// ========== UI КНОПКИ ==========
+// ====================================================================================
+// БЛОК 12: UI КНОПКИ И ПОЛЗУНКИ
+// ====================================================================================
+// Инициализация всех кнопок интерфейса и ползунков масштабирования моделей
 let positionModeBtn = null;
 let exportPositionsBtn = null;
 let togglePlanBtn = null;
@@ -1865,7 +2051,10 @@ if (modelScaleZSlider) {
 // Инициализируем значения при загрузке
 updateScaleValue();
 
-// ========== РЕСАЙЗ ==========
+// ====================================================================================
+// БЛОК 13: ОБРАБОТКА ИЗМЕНЕНИЯ РАЗМЕРА ОКНА
+// ====================================================================================
+// Обновляет размеры камеры и рендереров при изменении размера окна браузера
 function resize() {
   if (!camera || !renderer || !labelRenderer) return;
   
@@ -1889,9 +2078,17 @@ function resize() {
   
   renderer.setSize(width, height);
   labelRenderer.setSize(width, height); // Обновляем размер меток
+  
+  // Оптимизация pixel ratio для мобильных устройств
+  const pixelRatio = isMobileDevice ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
+  renderer.setPixelRatio(pixelRatio);
 }
 
-// ========== РЕНДЕРИНГ ==========
+// ====================================================================================
+// БЛОК 14: ГЛАВНЫЙ ЦИКЛ РЕНДЕРИНГА
+// ====================================================================================
+// Анимационный цикл, который обновляет сцену каждый кадр
+// Обновляет движение камеры, проверяет видимость меток, отрисовывает все объекты
 function animate() {
   requestAnimationFrame(animate);
   
@@ -1903,7 +2100,9 @@ function animate() {
   // Обновляем движение камеры только если не в режиме добавления меток
   if (!addLabelMode) {
     updateCameraMovement();
-    updateModelRotation();
+    if (window.updateModelRotation) {
+      window.updateModelRotation();
+    }
   }
   
   // Обновляем контролы только если они включены
@@ -1921,178 +2120,172 @@ function animate() {
   labelRenderer.render(scene, camera);
 }
 
-// ========== ОБРАБОТКА ОШИБОК ==========
-window.addEventListener("error", (event) => {
-  console.error("Глобальная ошибка:", event.error);
-});
-
-window.addEventListener("unhandledrejection", (event) => {
-  console.error("Необработанное обещание:", event.reason);
-});
-
-// Устанавливаем фокус на canvas
-canvas.addEventListener("click", () => {
-  canvas.focus();
-});
-
-// ========== ОБРАБОТКА КЛИКОВ НА СЦЕНУ ДЛЯ ДОБАВЛЕНИЯ МЕТОК ==========
-canvas.addEventListener("click", (event) => {
-  if (!addLabelMode) return;
-  if (positionMode) return; // Не добавляем метки в режиме позиционирования
-  
-  // Блокируем стандартное поведение (вращение камеры)
-  event.preventDefault();
-  event.stopPropagation();
-  
-  // Проверяем, не кликнули ли по UI элементу (кнопке, панели и т.д.)
-  const target = event.target;
-  if (target && (
-    target.closest('.hud') || 
-    target.closest('.labels-panel') || 
-    target.closest('.modal') ||
-    target.classList.contains('label') ||
-    target.tagName === 'BUTTON' ||
-    target.tagName === 'INPUT' ||
-    target.tagName === 'SELECT'
-  )) {
-    // Клик по UI элементу - не обрабатываем
-    return;
-  }
-  
-  // Получаем координаты мыши в нормализованных координатах (-1 до +1)
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  
-  // Обновляем raycaster
-  raycaster.setFromCamera(mouse, camera);
-  
-  // Проверяем пересечение с моделями
-  const intersects = raycaster.intersectObjects(loadedModels.filter(m => m !== null), true);
-  
-  let hitPoint = null;
-  let modelIndex = null;
-  
-  if (intersects.length > 0) {
-    // Клик по модели
-    const intersect = intersects[0];
-    hitPoint = intersect.point;
+  // ====================================================================================
+  // БЛОК 16: ОБРАБОТКА КЛИКОВ НА СЦЕНУ
+  // ====================================================================================
+  // Клик по сцене в режиме добавления меток создает новую метку
+  // Использует raycasting для определения точки клика в 3D пространстве
+  canvas.addEventListener("click", (event) => {
+    if (!addLabelMode) return;
+    if (positionMode) return; // Не добавляем метки в режиме позиционирования
     
-    // Находим индекс модели
-    for (let i = 0; i < loadedModels.length; i++) {
-      if (loadedModels[i] && loadedModels[i].traverse) {
-        let found = false;
-        loadedModels[i].traverse((child) => {
-          if (child === intersect.object || child === intersect.object.parent) {
-            found = true;
-          }
-        });
-        if (found) {
-          modelIndex = i + 1;
-          break;
-        }
-      }
-    }
-  } else {
-    // Клик по пустому месту - создаем метку на плоскости
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), PLAN_Y);
-    const intersectPoint = new THREE.Vector3();
-    raycaster.ray.intersectPlane(plane, intersectPoint);
-    hitPoint = intersectPoint;
-  }
-  
-  if (hitPoint) {
-    createNewLabel(hitPoint, modelIndex);
-  }
-});
-
-// ========== ОБРАБОТКА КЛИКОВ НА ЗДАНИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ЭТАЖЕЙ ==========
-canvas.addEventListener("click", (event) => {
-  // Работаем только если НЕ включен режим добавления меток и НЕ режим позиционирования
-  if (addLabelMode) return;
-  if (positionMode) return;
-  
-  // Проверяем, не кликнули ли по UI элементу
-  const target = event.target;
-  if (target && (
-    target.closest('.hud') || 
-    target.closest('.labels-panel') || 
-    target.closest('.modal') ||
-    target.classList.contains('label') ||
-    target.tagName === 'BUTTON' ||
-    target.tagName === 'INPUT' ||
-    target.tagName === 'SELECT'
-  )) {
-    return;
-  }
-  
-  // Получаем координаты мыши в нормализованных координатах (-1 до +1)
-  const rect = canvas.getBoundingClientRect();
-  const clickMouse = new THREE.Vector2();
-  clickMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  clickMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  
-  // Обновляем raycaster
-  const clickRaycaster = new THREE.Raycaster();
-  clickRaycaster.setFromCamera(clickMouse, camera);
-  
-  // Проверяем пересечение с моделями
-  const intersects = clickRaycaster.intersectObjects(loadedModels.filter(m => m !== null), true);
-  
-  if (intersects.length > 0) {
-    // Клик по модели - находим индекс модели
-    const intersect = intersects[0];
-    let clickedModelIndex = null;
+    // Блокируем стандартное поведение (вращение камеры)
+    event.preventDefault();
+    event.stopPropagation();
     
-    for (let i = 0; i < loadedModels.length; i++) {
-      if (loadedModels[i] && loadedModels[i].traverse) {
-        let found = false;
-        loadedModels[i].traverse((child) => {
-          if (child === intersect.object || child === intersect.object.parent || 
-              (intersect.object.parent && child === intersect.object.parent.parent)) {
-            found = true;
-          }
-        });
-        if (found) {
-          clickedModelIndex = i + 1;
-          break;
-        }
-      }
+    // Проверяем, не кликнули ли по UI элементу (кнопке, панели и т.д.)
+    const target = event.target;
+    if (target && (
+      target.closest('.hud') || 
+      target.closest('.labels-panel') || 
+      target.closest('.modal') ||
+      target.classList.contains('label') ||
+      target.tagName === 'BUTTON' ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'SELECT'
+    )) {
+      // Клик по UI элементу - не обрабатываем
+      return;
     }
     
-    // Если нашли модель, делаем её активной и обновляем отображение этажей
-    if (clickedModelIndex && clickedModelIndex !== activeModel) {
-      activeModel = clickedModelIndex;
-      updatePositionModeLabel();
+    // Получаем координаты мыши в нормализованных координатах (-1 до +1)
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    // Обновляем raycaster
+    raycaster.setFromCamera(mouse, camera);
+    
+    // Проверяем пересечение с моделями
+    const intersects = raycaster.intersectObjects(loadedModels.filter(m => m !== null), true);
+    
+    let hitPoint = null;
+    let modelIndex = null;
+    
+    if (intersects.length > 0) {
+      // Клик по модели
+      const intersect = intersects[0];
+      hitPoint = intersect.point;
       
-      // Обновляем отображение этажей
-      const floorDisplay = document.getElementById("floorDisplay");
-      if (floorDisplay) {
-        const modelKey = `model${activeModel}`;
-        const maxFloors = buildingFloors[modelKey] || 1;
-        
-        // Если текущий этаж больше максимального для нового здания, сбрасываем на максимум
-        if (currentFloor > maxFloors) {
-          currentFloor = maxFloors;
+      // Находим индекс модели
+      for (let i = 0; i < loadedModels.length; i++) {
+        if (loadedModels[i] && loadedModels[i].traverse) {
+          let found = false;
+          loadedModels[i].traverse((child) => {
+            if (child === intersect.object || child === intersect.object.parent) {
+              found = true;
+            }
+          });
+          if (found) {
+            modelIndex = i + 1;
+            break;
+          }
         }
-        
-        // Если был режим просмотра этажа, обновляем его для нового здания
-        if (currentFloor > 0) {
-          applyFloorView();
-        }
-        
-        // Обновляем отображение
-        if (currentFloor === 0) {
-          floorDisplay.textContent = "Все этажи";
-        } else {
-          floorDisplay.textContent = `Этаж ${currentFloor} / ${maxFloors}`;
+      }
+    } else {
+      // Клик по пустому месту - создаем метку на плоскости
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), PLAN_Y);
+      const intersectPoint = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, intersectPoint);
+      hitPoint = intersectPoint;
+    }
+    
+    if (hitPoint) {
+      createNewLabel(hitPoint, modelIndex);
+    }
+  });
+
+  // ====================================================================================
+  // БЛОК 17: ОБРАБОТКА КЛИКОВ НА ЗДАНИЯ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ЭТАЖЕЙ
+  // ====================================================================================
+  // Клик по зданию выбирает его для просмотра этажей
+  // Автоматически обновляет отображение этажей для выбранного здания
+  canvas.addEventListener("click", (event) => {
+    // Работаем только если НЕ включен режим добавления меток и НЕ режим позиционирования
+    if (addLabelMode) return;
+    if (positionMode) return;
+    
+    // Проверяем, не кликнули ли по UI элементу
+    const target = event.target;
+    if (target && (
+      target.closest('.hud') || 
+      target.closest('.labels-panel') || 
+      target.closest('.modal') ||
+      target.classList.contains('label') ||
+      target.tagName === 'BUTTON' ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'SELECT'
+    )) {
+      return;
+    }
+    
+    // Получаем координаты мыши в нормализованных координатах (-1 до +1)
+    const rect = canvas.getBoundingClientRect();
+    const clickMouse = new THREE.Vector2();
+    clickMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    clickMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    // Обновляем raycaster
+    const clickRaycaster = new THREE.Raycaster();
+    clickRaycaster.setFromCamera(clickMouse, camera);
+    
+    // Проверяем пересечение с моделями
+    const intersects = clickRaycaster.intersectObjects(loadedModels.filter(m => m !== null), true);
+    
+    if (intersects.length > 0) {
+      // Клик по модели - находим индекс модели
+      const intersect = intersects[0];
+      let clickedModelIndex = null;
+      
+      for (let i = 0; i < loadedModels.length; i++) {
+        if (loadedModels[i] && loadedModels[i].traverse) {
+          let found = false;
+          loadedModels[i].traverse((child) => {
+            if (child === intersect.object || child === intersect.object.parent || 
+                (intersect.object.parent && child === intersect.object.parent.parent)) {
+              found = true;
+            }
+          });
+          if (found) {
+            clickedModelIndex = i + 1;
+            break;
+          }
         }
       }
       
-      console.log(`✓ Выбрано здание ${activeModel} для просмотра этажей`);
+      // Если нашли модель, делаем её активной и обновляем отображение этажей
+      if (clickedModelIndex && clickedModelIndex !== activeModel) {
+        activeModel = clickedModelIndex;
+        updatePositionModeLabel();
+        
+        // Обновляем отображение этажей
+        const floorDisplay = document.getElementById("floorDisplay");
+        if (floorDisplay) {
+          const modelKey = `model${activeModel}`;
+          const maxFloors = buildingFloors[modelKey] || 1;
+          
+          // Если текущий этаж больше максимального для нового здания, сбрасываем на максимум
+          if (currentFloor > maxFloors) {
+            currentFloor = maxFloors;
+          }
+          
+          // Если был режим просмотра этажа, обновляем его для нового здания
+          if (currentFloor > 0) {
+            applyFloorView();
+          }
+          
+          // Обновляем отображение
+          if (currentFloor === 0) {
+            floorDisplay.textContent = "Все этажи";
+          } else {
+            floorDisplay.textContent = `Этаж ${currentFloor} / ${maxFloors}`;
+          }
+        }
+        
+        console.log(`✓ Выбрано здание ${activeModel} для просмотра этажей`);
+      }
     }
-  }
-});
+  });
 
   // Инициализируем кнопки меток после загрузки DOM
   if (document.readyState === 'loading') {
@@ -2107,10 +2300,199 @@ canvas.addEventListener("click", (event) => {
   window.addEventListener("load", () => {
     canvas.focus();
     console.log("✓ Приложение загружено");
+    
+    // Инициализация аккордеона меню
+    const hudMenu = document.getElementById('hudMenu');
+    const hudHeader = hudMenu?.querySelector('.hud-header');
+    
+    if (hudHeader) {
+      hudHeader.addEventListener('click', () => {
+        hudMenu.classList.toggle('expanded');
+      });
+    }
   });
+  
+  // ====================================================================================
+  // БЛОК 10: ОБРАБОТКА КЛАВИАТУРЫ
+  // ====================================================================================
+  // Управление камерой (WASD/стрелки), выбор моделей (1-9), поворот моделей (Q/E)
+  // В режиме позиционирования: перемещение моделей стрелками, подъем/опускание Space/Shift
+  window.addEventListener("keydown", (event) => {
+    // Сброс камеры
+    if (event.key === "r" || event.key === "R") {
+      camera.position.set(0, 480, 480);  // Высота увеличена в 2 раза
+      controls.target.set(0, 2, -10);
+      controls.update();
+      return;
+    }
+    
+    // Переключение между моделями (1-9)
+    if (event.key >= "1" && event.key <= "9") {
+      const modelNum = parseInt(event.key);
+      if (modelNum >= 1 && modelNum <= loadedModels.length) {
+        activeModel = modelNum;
+        updatePositionModeLabel();  // Обновит и ползунок масштаба
+        
+        // Обновляем отображение этажей для новой активной модели
+        const floorDisplay = document.getElementById("floorDisplay");
+        if (floorDisplay) {
+          const modelKey = `model${activeModel}`;
+          const maxFloors = buildingFloors[modelKey] || 1;
+          if (currentFloor > maxFloors) {
+            currentFloor = maxFloors;
+          }
+          if (currentFloor === 0) {
+            floorDisplay.textContent = "Все этажи";
+          } else {
+            floorDisplay.textContent = `Этаж ${currentFloor} / ${maxFloors}`;
+          }
+        }
+      }
+      return;
+    }
+    
+    // В режиме позиционирования модели
+    if (positionMode) {
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        nudgeActiveModel(0, 0, -POSITION_STEP);
+        return;
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        nudgeActiveModel(0, 0, POSITION_STEP);
+        return;
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        nudgeActiveModel(-POSITION_STEP, 0, 0);  // Влево
+        return;
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        nudgeActiveModel(POSITION_STEP, 0, 0);  // Вправо
+        return;
+      } else if (event.key === "q" || event.key === "Q") {
+        event.preventDefault();
+        rotateActiveModel(-ROTATION_STEP);
+        return;
+      } else if (event.key === "e" || event.key === "E") {
+        event.preventDefault();
+        rotateActiveModel(ROTATION_STEP);
+        return;
+      } else if (event.key === "PageUp" || event.key === " ") {
+        // Space или PageUp - поднять модель
+        event.preventDefault();
+        nudgeActiveModel(0, POSITION_STEP, 0);
+        return;
+      } else if (event.key === "PageDown" || event.key === "Shift") {
+        // Shift или PageDown - опустить модель
+        event.preventDefault();
+        nudgeActiveModel(0, -POSITION_STEP, 0);
+        return;
+      }
+    }
+    
+    // Управление камерой (когда не в режиме позиционирования)
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      keys.ArrowUp = true;
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      keys.ArrowDown = true;
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      keys.ArrowLeft = true;
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      keys.ArrowRight = true;
+    } else if (event.key === "w" || event.key === "W") {
+      event.preventDefault();
+      keys.w = true;
+    } else if (event.key === "s" || event.key === "S") {
+      event.preventDefault();
+      keys.s = true;
+    } else if (event.key === "a" || event.key === "A") {
+      event.preventDefault();
+      keys.a = true;
+    } else if (event.key === "d" || event.key === "D") {
+      event.preventDefault();
+      keys.d = true;
+    } else if (event.key === " ") {
+      event.preventDefault();
+      keys.Space = true;
+    } else if (event.key === "Shift") {
+      event.preventDefault();
+      keys.Shift = true;
+    } else if (event.key === "PageUp") {
+      event.preventDefault();
+      keys.PageUp = true;
+    } else if (event.key === "PageDown") {
+      event.preventDefault();
+      keys.PageDown = true;
+    }
+  });
+
+  window.addEventListener("keyup", (event) => {
+    if (event.key === "ArrowUp") keys.ArrowUp = false;
+    else if (event.key === "ArrowDown") keys.ArrowDown = false;
+    else if (event.key === "ArrowLeft") keys.ArrowLeft = false;
+    else if (event.key === "ArrowRight") keys.ArrowRight = false;
+    else if (event.key === "w" || event.key === "W") keys.w = false;
+    else if (event.key === "s" || event.key === "S") keys.s = false;
+    else if (event.key === "a" || event.key === "A") keys.a = false;
+    else if (event.key === "d" || event.key === "D") keys.d = false;
+    else if (event.key === " ") keys.Space = false;
+    else if (event.key === "Shift") keys.Shift = false;
+    else if (event.key === "PageUp") keys.PageUp = false;
+    else if (event.key === "PageDown") keys.PageDown = false;
+  });
+  
+  // ====================================================================================
+  // БЛОК 15: ОБРАБОТКА ОШИБОК
+  // ====================================================================================
+  // Глобальные обработчики ошибок для отлова проблем при загрузке и выполнении
+  window.addEventListener("error", (event) => {
+    console.error("Глобальная ошибка:", event.error);
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    console.error("Необработанное обещание:", event.reason);
+  });
+
+  // Устанавливаем фокус на canvas
+  canvas.addEventListener("click", () => {
+    canvas.focus();
+  });
+  
+  // Обновление вращения моделей
+  function updateModelRotation() {
+    if (positionMode) return;
+    if (activeModel < 1 || activeModel > loadedModels.length) return;
+    
+    const rotationSpeed = ROTATION_STEP * 0.5;
+    
+    if (keys.q || keys.Q) {
+      rotateActiveModel(-rotationSpeed);
+    }
+    if (keys.e || keys.E) {
+      rotateActiveModel(rotationSpeed);
+    }
+  }
+  
+  // Делаем функцию доступной глобально для вызова из animate()
+  window.updateModelRotation = updateModelRotation;
+  
+  // Запускаем анимацию после инициализации
+  animate();
+
+  // Добавляем обработчик ресайза
+  window.addEventListener("resize", resize);
 }
 
-// ========== ИНИЦИАЛИЗАЦИЯ КНОПОК МЕТОК ==========
+// ====================================================================================
+// БЛОК 18: ИНИЦИАЛИЗАЦИЯ КНОПОК МЕТОК
+// ====================================================================================
+// Настраивает обработчики событий для всех кнопок управления метками
+// Кнопки: добавление меток, показ/скрытие панели меток, скачивание меток
+
 let labelButtonsInitialized = false;
 
 function initLabelButtons() {
@@ -2218,9 +2600,12 @@ function initLabelButtons() {
   }
 }
 
-/**
- * Инициализация кнопок управления этажами
- */
+// ====================================================================================
+// БЛОК 19: ИНИЦИАЛИЗАЦИЯ КНОПОК УПРАВЛЕНИЯ ЭТАЖАМИ
+// ====================================================================================
+// Настраивает кнопки для переключения этажей: +, -, "Все"
+// Обновляет отображение текущего этажа и применяет режим просмотра
+
 function initFloorButtons() {
   const floorUpBtn = document.getElementById("floorUpBtn");
   const floorDownBtn = document.getElementById("floorDownBtn");
@@ -2296,9 +2681,11 @@ function initFloorButtons() {
   console.log("✓ Кнопки управления этажами инициализированы");
 }
 
-/**
- * Применяет режим просмотра этажа
- */
+// ====================================================================================
+// БЛОК 20: РЕЖИМ ПРОСМОТРА ЭТАЖА
+// ====================================================================================
+// Переключает камеру в ортографический режим для вида сверху на выбранный этаж
+// При выборе "Все этажи" возвращает перспективную камеру
 function applyFloorView() {
   if (!camera || !controls || activeModel < 1 || activeModel > loadedModels.length) return;
   
@@ -2387,7 +2774,7 @@ function applyFloorView() {
     controls.update();
   }
   
-  console.log(`Режим этажей: ${currentFloor === 0 ? 'Все этажи' : `Этаж ${currentFloor}`}`);
+  console.log(`Режим этажей: ${currentFloor === 0 ? 'Все этажи' : 'Этаж ' + currentFloor}`);
 }
 
 // Запускаем инициализацию

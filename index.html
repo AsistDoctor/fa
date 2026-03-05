@@ -1,11 +1,74 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Floor Plan 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    
+    <!-- SEO Meta Tags -->
+    <title>3D Интерактивная Карта Кампуса - Визуализация Университета</title>
+    <meta name="description" content="Интерактивная 3D карта университетского кампуса с навигацией по этажам, метками аудиторий и виртуальными турами. Изучите здания университета в трехмерном пространстве." />
+    <meta name="keywords" content="3D карта кампуса, интерактивная карта университета, визуализация зданий, навигация по этажам, виртуальный тур, 3D модели зданий" />
+    <meta name="author" content="University Campus 3D" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="Russian" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="3D Интерактивная Карта Кампуса - Визуализация Университета" />
+    <meta property="og:description" content="Интерактивная 3D карта университетского кампуса с навигацией по этажам и метками аудиторий" />
+    <meta property="og:image" content="/og-image.jpg" />
+    <meta property="og:url" content="" />
+    <meta property="og:site_name" content="University Campus 3D" />
+    <meta property="og:locale" content="ru_RU" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="3D Интерактивная Карта Кампуса" />
+    <meta name="twitter:description" content="Интерактивная 3D карта университетского кампуса с навигацией по этажам" />
+    <meta name="twitter:image" content="/og-image.jpg" />
+    
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    
+    <!-- Preload критических ресурсов -->
+    <link rel="preload" href="styles.css" as="style" />
+    <!-- main.js не предзагружаем, так как это модуль и preload не работает корректно с type="module" -->
+    
+    <!-- DNS Prefetch для внешних ресурсов -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com" />
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="" />
+    
+    <!-- Альтернативные языки (если планируется мультиязычность) -->
+    <!-- <link rel="alternate" hreflang="en" href="/en/" /> -->
+    
+    <!-- Stylesheet -->
     <link rel="stylesheet" href="styles.css" />
+    
+    <!-- Структурированные данные (JSON-LD) для поисковых систем -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "3D Интерактивная Карта Кампуса",
+      "description": "Интерактивная 3D визуализация университетского кампуса с навигацией по этажам и метками аудиторий",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "RUB"
+      },
+      "featureList": [
+        "3D визуализация зданий",
+        "Навигация по этажам",
+        "Интерактивные метки",
+        "Виртуальные туры"
+      ]
+    }
+    </script>
     <script type="importmap">
     {
       "imports": {
@@ -18,39 +81,60 @@
   <body>
     <div id="app">
       <canvas id="c" tabindex="0"></canvas>
-      <div class="hud">
-        <div class="title">3D Model</div>
-        <div class="hint">Drag to orbit • Scroll to zoom • Arrows/WASD to fly • Space/Shift to move up/down • 1-9 select model • Q/E rotate model • In Position Mode: Arrows move, Space/Shift lift/lower</div>
-        <button id="positionModeBtn" class="export-btn">Position Mode: Off</button>
-        <button id="exportPositionsBtn" class="export-btn">Export Positions</button>
-        <button id="addLabelModeBtn" class="export-btn">Add Label Mode: Off</button>
-        <button id="showLabelsPanelBtn" class="export-btn">Show Labels</button>
-        <button id="downloadLabelsBtn" class="export-btn">Download Labels</button>
-        <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">
-          <div style="font-size: 11px; margin-bottom: 4px;">Этажи здания:</div>
-          <div style="display: flex; align-items: center; gap: 4px;">
-            <button id="floorDownBtn" class="export-btn" style="width: 40px;">-</button>
-            <span id="floorDisplay" style="font-size: 11px; min-width: 80px; text-align: center;">Этаж 1</span>
-            <button id="floorUpBtn" class="export-btn" style="width: 40px;">+</button>
-            <button id="floorResetBtn" class="export-btn" style="width: 60px; margin-left: 4px;">Все</button>
+      
+      <!-- Прогресс-бар загрузки -->
+      <div id="loadingProgress" class="loading-progress">
+        <div class="loading-progress-content">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">🦆 Загрузка 3D карты... 🦆</div>
+          <div class="loading-bar-container">
+            <div id="loadingBar" class="loading-bar"></div>
           </div>
+          <div id="loadingStatus" class="loading-status">0% 🦆</div>
         </div>
-        <div style="margin-top: 8px;">
-          <label id="scaleLabel" style="display: block; margin-bottom: 4px; font-size: 11px;">Масштаб модели (Model 1):</label>
-          <div style="margin-bottom: 6px;">
-            <label style="font-size: 10px; display: inline-block; width: 20px;">X:</label>
-            <input type="range" id="modelScaleXSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
-            <span id="scaleXValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+      </div>
+      
+      <div class="hud" id="hudMenu">
+        <div class="hud-header">
+          <div class="hud-header-content">
+            <div class="title">3D Карта Кампуса</div>
+            <div class="hint desktop-hint">Перетаскивайте для вращения • Прокрутка для масштабирования • Стрелки/WASD для перемещения • Space/Shift вверх/вниз • 1-9 выбор модели • Q/E поворот модели</div>
+            <div class="hint mobile-hint" style="display: none;">Касание и перетаскивание для вращения • Жест сжатия для масштабирования • Кнопки управления ниже</div>
           </div>
-          <div style="margin-bottom: 6px;">
-            <label style="font-size: 10px; display: inline-block; width: 20px;">Y:</label>
-            <input type="range" id="modelScaleYSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
-            <span id="scaleYValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+          <div class="hud-toggle-icon">▼</div>
+        </div>
+        <div class="hud-content">
+          <button id="positionModeBtn" class="export-btn">Position Mode: Off</button>
+          <button id="exportPositionsBtn" class="export-btn">Export Positions</button>
+          <button id="addLabelModeBtn" class="export-btn">Add Label Mode: Off</button>
+          <button id="showLabelsPanelBtn" class="export-btn">Show Labels</button>
+          <button id="downloadLabelsBtn" class="export-btn">Download Labels</button>
+          <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">
+            <div style="font-size: 11px; margin-bottom: 4px;">Этажи здания:</div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button id="floorDownBtn" class="export-btn" style="width: 40px;">-</button>
+              <span id="floorDisplay" style="font-size: 11px; min-width: 80px; text-align: center;">Этаж 1</span>
+              <button id="floorUpBtn" class="export-btn" style="width: 40px;">+</button>
+              <button id="floorResetBtn" class="export-btn" style="width: 60px; margin-left: 4px;">Все</button>
+            </div>
           </div>
-          <div style="margin-bottom: 6px;">
-            <label style="font-size: 10px; display: inline-block; width: 20px;">Z:</label>
-            <input type="range" id="modelScaleZSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
-            <span id="scaleZValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+          <div style="margin-top: 8px;">
+            <label id="scaleLabel" style="display: block; margin-bottom: 4px; font-size: 11px;">Масштаб модели (Model 1):</label>
+            <div style="margin-bottom: 6px;">
+              <label style="font-size: 10px; display: inline-block; width: 20px;">X:</label>
+              <input type="range" id="modelScaleXSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
+              <span id="scaleXValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+            </div>
+            <div style="margin-bottom: 6px;">
+              <label style="font-size: 10px; display: inline-block; width: 20px;">Y:</label>
+              <input type="range" id="modelScaleYSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
+              <span id="scaleYValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+            </div>
+            <div style="margin-bottom: 6px;">
+              <label style="font-size: 10px; display: inline-block; width: 20px;">Z:</label>
+              <input type="range" id="modelScaleZSlider" min="0.1" max="10" step="0.01" value="1" style="width: 150px;">
+              <span id="scaleZValue" style="margin-left: 8px; font-size: 10px;">100%</span>
+            </div>
           </div>
         </div>
       </div>

@@ -1,0 +1,16 @@
+# Robots.txt для 3D карты кампуса
+User-agent: *
+Allow: /
+
+# Разрешаем индексирование всех страниц
+Allow: /index.html
+Allow: /main.js
+Allow: /styles.css
+
+# Запрещаем индексирование служебных файлов
+Disallow: /node_modules/
+Disallow: /*.json$
+Disallow: /models/*.obj$
+
+# Sitemap
+Sitemap: /sitemap.xml
