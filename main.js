@@ -38,6 +38,30 @@ let labelRenderer = null;
 let controls = null;
 let canvas = null;
 
+// Глобальные переменные для управления солнцем и луной
+let sunLightRef = null;
+let moonLightRef = null;
+let ambientLightRef = null;
+let sunMesh = null; // Визуальный объект солнца
+let moonMesh = null; // Визуальный объект луны
+let sunTargetRef = null; // Цель направленного света солнца (центр сцены)
+const sunTargetPosition = new THREE.Vector3();
+const moonTargetPosition = new THREE.Vector3();
+const visualSunPosition = new THREE.Vector3();
+const visualMoonPosition = new THREE.Vector3();
+const LIGHT_SMOOTHING = 0.08;
+const SHADOW_LIGHT_UPDATE_MS = 250;
+let lastShadowLightUpdateMs = 0;
+
+// DEV API для реактивного сохранения позиций в БД
+const DEV_API_BASE = "/api/dev";
+const DEV_CLIENT_ID = `client-${Math.random().toString(36).slice(2, 10)}`;
+let devApiAvailable = false;
+let devApiDetectionPromise = null;
+let devEventSource = null;
+let applyingRemoteUpdate = false;
+const modelSyncTimers = new Map();
+
 // Система этажей
 let currentFloor = 0; // 0 = все этажи, 1+ = конкретный этаж
 let floorHeight = 3.5; // Высота одного этажа в единицах 3D (метры)
@@ -192,6 +216,9 @@ function initApp() {
   // План будет расширен динамически на основе позиций моделей
   let PLAN_TEXTURE_SIZE = PLAN_SIZE * 1.35; // Начальный размер, будет пересчитан
   const PLAN_Y = -PLAN_SIZE * 0.03;
+  
+  // Делаем PLAN_TEXTURE_SIZE доступной глобально для функции expandFloorToFitModels
+  window.PLAN_TEXTURE_SIZE = PLAN_TEXTURE_SIZE;
   const POSITION_STEP = PLAN_SIZE * 0.01;
   const ROTATION_STEP = Math.PI / 36;
 
@@ -206,7 +233,8 @@ if (!canvas) {
 console.log("🦆✓ Canvas найден 🦆");
 
 scene = new THREE.Scene();
-scene.background = new THREE.Color(0xe0e0e0);
+// Фон будет обновляться в зависимости от времени суток в updateSunMoonPosition()
+scene.background = new THREE.Color(0x87ceeb); // Начальный цвет - голубое небо
 
 camera = new THREE.PerspectiveCamera(
   55,
@@ -235,7 +263,82 @@ const initialPixelRatio = isMobileDevice
                          ? Math.min(window.devicePixelRatio, 1.5) 
                          : Math.min(window.devicePixelRatio, 2);
 renderer.setPixelRatio(initialPixelRatio);
-renderer.shadowMap.enabled = false;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// ========== СОЗДАНИЕ ОСВЕЩЕНИЯ ==========
+// Атмосферное освещение (меняется в зависимости от времени суток)
+ambientLightRef = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambientLightRef);
+
+// Солнце - основной источник света с тенями
+sunLightRef = new THREE.DirectionalLight(0xffd700, 1.5); // Золотистый цвет солнца
+sunLightRef.castShadow = true;
+sunLightRef.shadow.mapSize.width = 2048;
+sunLightRef.shadow.mapSize.height = 2048;
+sunLightRef.shadow.camera.near = 0.5;
+sunLightRef.shadow.camera.far = 2000;
+sunLightRef.shadow.camera.left = -1400;
+sunLightRef.shadow.camera.right = 1400;
+sunLightRef.shadow.camera.top = 1400;
+sunLightRef.shadow.camera.bottom = -1400;
+sunLightRef.shadow.bias = -0.0005;
+sunLightRef.shadow.normalBias = 0.02;
+sunLightRef.shadow.radius = 2;
+scene.add(sunLightRef);
+
+// Цель солнца: центр сцены/пола, чтобы тени не "ломались" при движении света
+sunTargetRef = new THREE.Object3D();
+sunTargetRef.position.set(0, 0, 0);
+scene.add(sunTargetRef);
+sunLightRef.target = sunTargetRef;
+
+// Луна - слабый источник света ночью
+moonLightRef = new THREE.DirectionalLight(0x9bb0ff, 0.3); // Голубоватый цвет луны
+moonLightRef.castShadow = true;
+moonLightRef.shadow.mapSize.width = 1024;
+moonLightRef.shadow.mapSize.height = 1024;
+moonLightRef.shadow.camera.near = 0.5;
+moonLightRef.shadow.camera.far = 2000;
+moonLightRef.shadow.camera.left = -500;
+moonLightRef.shadow.camera.right = 500;
+moonLightRef.shadow.camera.top = 500;
+moonLightRef.shadow.camera.bottom = -500;
+moonLightRef.shadow.bias = -0.0001;
+moonLightRef.shadow.radius = 4;
+moonLightRef.castShadow = false; // Ночные тени отключены для стабильности и производительности
+scene.add(moonLightRef);
+
+// ========== ВИЗУАЛЬНЫЕ ОБЪЕКТЫ СОЛНЦА И ЛУНЫ ==========
+// Создаем визуальное представление солнца (большая светящаяся сфера)
+const sunGeometry = new THREE.SphereGeometry(50, 32, 32);
+const sunMaterial = new THREE.MeshStandardMaterial({
+  color: 0xffd700,
+  emissive: 0xffd700,
+  emissiveIntensity: 2.5,
+  metalness: 0.0,
+  roughness: 0.0
+});
+sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+sunMesh.position.copy(sunLightRef.position);
+sunMesh.position.y *= 10; // Поднимаем визуальное солнце в 10 раз выше
+sunMesh.renderOrder = 999; // Рендерим солнце поверх всего
+scene.add(sunMesh);
+
+// Создаем визуальное представление луны (светящаяся сфера)
+const moonGeometry = new THREE.SphereGeometry(30, 32, 32);
+const moonMaterial = new THREE.MeshStandardMaterial({
+  color: 0x9bb0ff,
+  emissive: 0x9bb0ff,
+  emissiveIntensity: 1.5,
+  metalness: 0.0,
+  roughness: 0.0
+});
+moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
+moonMesh.position.copy(moonLightRef.position);
+moonMesh.position.y *= 10; // Поднимаем визуальную луну в 10 раз выше
+moonMesh.renderOrder = 998; // Рендерим луну поверх всего
+scene.add(moonMesh);
 
 // ========== CSS2DRenderer ДЛЯ МЕТОК ==========
 // Отдельный рендерер для HTML меток, которые отображаются поверх 3D сцены
@@ -301,19 +404,131 @@ let keys = {
   PageDown: false,
 };
 
-// ========== ОСВЕЩЕНИЕ ==========
-// Настраиваем освещение сцены: окружающий свет + направленный свет для реалистичности
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);  // Увеличена яркость
-scene.add(ambientLight);
+// ========== ОСВЕЩЕНИЕ С РЕАЛЬНЫМ ВРЕМЕНЕМ ==========
+// Солнце и луна с динамическим позиционированием на основе текущего времени
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);  // Увеличена яркость
-directionalLight.position.set(-0.3, -1.0, -0.2);
-scene.add(directionalLight);
+// Глобальные переменные для управления солнцем и луной (инициализируются после создания renderer)
 
-// Добавляем дополнительный свет сверху для лучшей видимости
-const topLight = new THREE.DirectionalLight(0xffffff, 0.5);
-topLight.position.set(0, 1, 0);
-scene.add(topLight);
+/**
+ * Вычисляет позицию солнца и луны на основе реального времени
+ * @param {Date} date - Дата и время (по умолчанию текущее)
+ * @returns {Object} Объект с позициями солнца и луны, а также интенсивностью освещения
+ */
+function calculateSunMoonPosition(date = new Date()) {
+  const hours = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
+  const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+
+  // Суточный цикл: 0..2PI, где солнце в зените около 12:00
+  const cycle = (hours / 24) * Math.PI * 2;
+  const dayAngle = cycle - Math.PI / 2;
+
+  // Небольшая сезонная вариация высоты дуги солнца
+  const seasonalTilt = Math.sin(((dayOfYear - 81) / 365) * Math.PI * 2) * 0.2;
+
+  // Базовое расстояние до источников света
+  const distance = 1400;
+  const verticalScale = 0.95 + seasonalTilt;
+
+  // Солнце
+  const sunX = Math.cos(dayAngle) * distance;
+  const sunY = Math.sin(dayAngle) * distance * verticalScale;
+  const sunZ = Math.sin(dayAngle * 0.65) * distance * 0.55;
+
+  // Луна противоположна солнцу
+  const moonX = -sunX;
+  const moonY = -sunY;
+  const moonZ = -sunZ;
+
+  // Нормализованный "дневной" фактор
+  const daylight = Math.max(0, sunY / (distance * verticalScale));
+  const moonlight = Math.max(0, -sunY / (distance * verticalScale));
+
+  // Интенсивности
+  const sunIntensity = Math.min(1.45, daylight * 1.45);
+  const moonIntensity = Math.min(0.45, moonlight * 0.35);
+  const ambientIntensity = 0.18 + daylight * 0.42 + moonlight * 0.08;
+
+  const sunElevation = Math.asin(Math.max(-1, Math.min(1, sunY / (distance * verticalScale))));
+
+  return {
+    sun: { x: sunX, y: sunY, z: sunZ, intensity: sunIntensity },
+    moon: { x: moonX, y: moonY, z: moonZ, intensity: moonIntensity },
+    ambient: ambientIntensity,
+    sunElevation: sunElevation
+  };
+}
+
+/**
+ * Обновляет позиции солнца и луны на основе текущего времени
+ */
+function updateSunMoonPosition() {
+  if (!sunLightRef || !moonLightRef || !ambientLightRef) return;
+  const positions = calculateSunMoonPosition();
+  const nowMs = performance.now();
+
+  // Центрируем цель света по центру пола, если пол уже создан
+  if (sunTargetRef) {
+    const tx = floor ? floor.position.x : 0;
+    const tz = floor ? floor.position.z : 0;
+    sunTargetRef.position.set(tx, 0, tz);
+    sunTargetRef.updateMatrixWorld();
+  }
+  
+  // Целевая позиция солнца
+  const safeSunY = positions.sun.intensity > 0.08 ? Math.max(positions.sun.y, 160) : positions.sun.y;
+  sunTargetPosition.set(positions.sun.x, safeSunY, positions.sun.z);
+  
+  // Визуальное солнце обновляем каждый кадр (гладко)
+  if (sunMesh) {
+    visualSunPosition.set(sunTargetPosition.x, sunTargetPosition.y * 10, sunTargetPosition.z);
+    sunMesh.position.lerp(visualSunPosition, LIGHT_SMOOTHING);
+    sunMesh.visible = positions.sun.intensity > 0.1;
+    sunMesh.material.emissiveIntensity = Math.max(0.5, positions.sun.intensity);
+  }
+
+  // Целевая позиция луны
+  moonTargetPosition.set(positions.moon.x, positions.moon.y, positions.moon.z);
+
+  // Визуальную луну обновляем каждый кадр (гладко)
+  if (moonMesh) {
+    visualMoonPosition.set(moonTargetPosition.x, moonTargetPosition.y * 10, moonTargetPosition.z);
+    moonMesh.position.lerp(visualMoonPosition, LIGHT_SMOOTHING);
+    moonMesh.visible = positions.moon.intensity > 0.1;
+    moonMesh.material.emissiveIntensity = Math.max(0.3, positions.moon.intensity * 2);
+  }
+
+  // Теневой свет обновляем не каждый кадр, чтобы убрать микродергания и снизить нагрузку
+  if (nowMs - lastShadowLightUpdateMs >= SHADOW_LIGHT_UPDATE_MS) {
+    lastShadowLightUpdateMs = nowMs;
+
+    sunLightRef.position.copy(sunTargetPosition);
+    sunLightRef.intensity = positions.sun.intensity;
+    sunLightRef.visible = positions.sun.intensity > 0.1;
+
+    moonLightRef.position.copy(moonTargetPosition);
+    moonLightRef.intensity = positions.moon.intensity;
+    moonLightRef.visible = positions.moon.intensity > 0.1;
+
+    ambientLightRef.intensity = positions.ambient;
+  }
+  
+  // Обновляем цвет неба в зависимости от времени суток
+  if (positions.sunElevation > 0) {
+    // День - светлое небо
+    scene.background = new THREE.Color(0x87ceeb); // Голубое небо
+  } else if (positions.sunElevation > -0.2) {
+    // Закат/рассвет - оранжевое небо
+    const factor = (positions.sunElevation + 0.2) / 0.2;
+    scene.background = new THREE.Color().lerpColors(
+      new THREE.Color(0xff6347), // Красноватый закат
+      new THREE.Color(0x87ceeb), // Голубое небо
+      factor
+    );
+  } else {
+    // Ночь - темное небо
+    scene.background = new THREE.Color(0x191970); // Темно-синее ночное небо
+  }
+}
 
 // ========== ПОЛ И СЕТКА ==========
 // Создаем плоскость пола и сетку для ориентации в пространстве
@@ -331,6 +546,7 @@ function createFloor() {
   floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = PLAN_Y;
+  floor.receiveShadow = true; // Пол принимает тени
   scene.add(floor);
 
   // Сетка для ориентации
@@ -344,19 +560,22 @@ function createFloor() {
   scene.add(gridHelper);
 }
 
-// Флаг для предотвращения повторных обновлений плана
-let floorExpanded = false;
-
 // Функция для расширения плана на основе позиций моделей
+// Может вызываться многократно для динамического расширения
 function expandFloorToFitModels() {
-  if (loadedModels.length === 0 || floorExpanded) return;
+  if (!loadedModels || loadedModels.length === 0) {
+    console.log("🦆 Модели еще не загружены, пропускаем расширение плана 🦆");
+    return;
+  }
   
   // Находим границы всех моделей
   let minX = Infinity, maxX = -Infinity;
   let minZ = Infinity, maxZ = -Infinity;
   
+  let validModels = 0;
   loadedModels.forEach((model) => {
     if (!model) return;
+    validModels++;
     
     // Получаем границы модели
     const box = new THREE.Box3().setFromObject(model);
@@ -370,11 +589,16 @@ function expandFloorToFitModels() {
   });
   
   // Проверяем, что нашли валидные границы
-  if (minX === Infinity || maxX === -Infinity) return;
+  if (minX === Infinity || maxX === -Infinity || validModels === 0) {
+    console.log("🦆 Не найдено валидных границ моделей 🦆");
+    return;
+  }
   
-  // Добавляем запас (20% от размера)
-  const paddingX = (maxX - minX) * 0.2;
-  const paddingZ = (maxZ - minZ) * 0.2;
+  console.log(`🦆 Найдено ${validModels} моделей, границы: X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Z[${minZ.toFixed(2)}, ${maxZ.toFixed(2)}] 🦆`);
+  
+  // Добавляем запас в 5 раз больше для полного покрытия всех корпусов
+  const paddingX = (maxX - minX) * 2.5; // Увеличено в 5 раз (было 0.3, стало 2.5)
+  const paddingZ = (maxZ - minZ) * 2.5; // Увеличено в 5 раз (было 0.3, стало 2.5)
   minX -= paddingX;
   maxX += paddingX;
   minZ -= paddingZ;
@@ -385,24 +609,30 @@ function expandFloorToFitModels() {
   const newSizeZ = maxZ - minZ;
   const newSize = Math.max(newSizeX, newSizeZ);
   
-  // Минимальный размер для красоты
-  const minSize = PLAN_SIZE * 2;
+  // Минимальный размер увеличен в 5 раз для лучшего покрытия
+  const minSize = PLAN_SIZE * 12.5; // Увеличено в 5 раз (было 2.5, стало 12.5)
   const targetSize = Math.max(newSize, minSize);
   
-  // Обновляем только если размер значительно изменился (более чем на 10%)
-  if (Math.abs(targetSize - PLAN_TEXTURE_SIZE) / PLAN_TEXTURE_SIZE < 0.1) {
-    floorExpanded = true;
+  // Получаем текущий размер плана (может быть изменен внутри initApp)
+  const currentPlanSize = window.PLAN_TEXTURE_SIZE || PLAN_SIZE * 1.35;
+  
+  console.log(`🦆 Текущий размер плана: ${currentPlanSize.toFixed(2)}, целевой размер: ${targetSize.toFixed(2)} 🦆`);
+  
+  // Всегда обновляем пол, если размер изменился (даже если уже расширяли ранее)
+  if (Math.abs(targetSize - currentPlanSize) < 1) {
+    console.log("🦆 Размер плана оптимален, не требует изменений 🦆");
     return;
   }
   
-  PLAN_TEXTURE_SIZE = targetSize;
+  // Обновляем глобальную переменную размера плана
+  window.PLAN_TEXTURE_SIZE = targetSize;
   
   // Обновляем геометрию пола
   if (floor) {
     // Удаляем старую геометрию из памяти
     const oldGeometry = floor.geometry;
     // Создаём новую геометрию с новым размером
-    const floorGeometry = new THREE.PlaneGeometry(PLAN_TEXTURE_SIZE, PLAN_TEXTURE_SIZE);
+    const floorGeometry = new THREE.PlaneGeometry(targetSize, targetSize);
     floor.geometry = floorGeometry;
     // Освобождаем память старой геометрии после замены
     oldGeometry.dispose();
@@ -412,7 +642,7 @@ function expandFloorToFitModels() {
   if (gridHelper) {
     scene.remove(gridHelper);
     gridHelper.dispose(); // Освобождаем память
-    const gridSize = Math.ceil(PLAN_TEXTURE_SIZE / 100) * 100; // Округляем до сотен
+    const gridSize = Math.ceil(targetSize / 100) * 100; // Округляем до сотен
     const divisions = Math.max(20, Math.floor(gridSize / 100)); // Минимум 20 делений
     gridHelper = new THREE.GridHelper(
       gridSize,
@@ -420,16 +650,34 @@ function expandFloorToFitModels() {
       0x595966,
       0x595966
     );
+    const PLAN_Y = -PLAN_SIZE * 0.03;
     gridHelper.position.y = PLAN_Y + 0.01;
     scene.add(gridHelper);
   }
   
-  floorExpanded = true;
-  console.log(`✓ План расширен до размера: ${PLAN_TEXTURE_SIZE.toFixed(2)} x ${PLAN_TEXTURE_SIZE.toFixed(2)}`);
+  console.log(`✓ План расширен до размера: ${targetSize.toFixed(2)} x ${targetSize.toFixed(2)}`);
+  
+  // Центрируем пол относительно всех моделей (используем координаты после добавления padding)
+  const centerX = (minX + maxX) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  if (floor) {
+    floor.position.x = centerX;
+    floor.position.z = centerZ;
+    console.log(`✓ Пол перемещен в центр: X=${centerX.toFixed(2)}, Z=${centerZ.toFixed(2)}`);
+  }
+  if (gridHelper) {
+    gridHelper.position.x = centerX;
+    gridHelper.position.z = centerZ;
+    console.log(`✓ Сетка перемещена в центр: X=${centerX.toFixed(2)}, Z=${centerZ.toFixed(2)}`);
+  }
 }
 
 createFloor();
 console.log("🦆✓ Пол создан 🦆");
+
+// Инициализируем позиции солнца и луны на основе текущего времени
+updateSunMoonPosition();
+console.log("🦆✓ Солнце и луна инициализированы 🦆");
 
 // ========== ЗАГРУЗКА МОДЕЛЕЙ ==========
 console.log("🦆 Инициализируем массивы для моделей... 🦆");
@@ -478,11 +726,16 @@ try {
   console.error("🦆✗ ОШИБКА при вызове loadAllModels():", error, "🦆");
 }
 
-// Расширяем план под все модели после применения позиций (вызываем один раз)
-// Используем небольшую задержку, чтобы убедиться, что все модели позиционированы
+// Расширяем план под все модели после применения позиций (вызываем несколько раз для надежности)
+// Используем небольшие задержки, чтобы убедиться, что все модели позиционированы
 console.log("🦆 Настраиваем setTimeout для расширения плана... 🦆");
 setTimeout(() => {
   expandFloorToFitModels();
+  
+  // Повторно расширяем через большее время для гарантии
+  setTimeout(() => {
+    expandFloorToFitModels();
+  }, 2000);
   
   // Загружаем сохраненные метки
   loadLabelsFromJSON();
@@ -509,21 +762,12 @@ function updateLoadingProgress(loaded, total, modelName = '') {
   if (progressBar && progressStatus) {
     progressBar.style.width = `${percentage}%`;
     
-    // Добавляем уточку в статус с разными состояниями
-    let duckEmoji = '🦆';
-    if (percentage === 0) duckEmoji = '🦆';
-    else if (percentage < 25) duckEmoji = '🦆';
-    else if (percentage < 50) duckEmoji = '🦆';
-    else if (percentage < 75) duckEmoji = '🦆';
-    else if (percentage < 100) duckEmoji = '🦆';
-    else duckEmoji = '🦆✓';
-    
-    progressStatus.textContent = `${percentage}% ${duckEmoji}`;
+    progressStatus.textContent = `${percentage}%`;
     
     if (loadingText && modelName) {
-      loadingText.textContent = `🦆 Загрузка: ${modelName} 🦆`;
+      loadingText.textContent = `Загрузка: ${modelName}`;
     } else if (loadingText) {
-      loadingText.textContent = `🦆 Загрузка 3D карты... 🦆`;
+      loadingText.textContent = `Загрузка 3D карты...`;
     }
   }
   
@@ -537,7 +781,7 @@ function showLoadingProgress() {
   if (loadingProgress) {
     loadingProgress.style.display = 'flex';
     loadingProgress.classList.remove('hidden');
-    updateLoadingProgress(0, modelFiles.length, '🦆 Инициализация... 🦆');
+    updateLoadingProgress(0, modelFiles.length, 'Инициализация...');
     console.log("🦆✓ Прогресс-бар отображен 🦆");
   } else {
     console.error("🦆✗ Элемент loadingProgress не найден! 🦆");
@@ -670,6 +914,10 @@ async function loadAllModels() {
                   metalness: 0.1,
                   roughness: 0.7
                 });
+                
+                // Включаем тени для моделей
+                child.castShadow = true;
+                child.receiveShadow = true;
               }
             });
             
@@ -696,7 +944,7 @@ async function loadAllModels() {
             buildingFloors[modelKey] = estimatedFloors;
             
             loadedCount++;
-            updateLoadingProgress(loadedCount, totalModels, `🦆 Модель ${index + 1} 🦆`);
+            updateLoadingProgress(loadedCount, totalModels, `Модель ${index + 1}`);
             
             console.log(`🦆✓ Модель ${index + 1} (${file}) загружена, высота: ${height.toFixed(2)} 🦆`);
             console.log(`🦆  → Определено этажей: ${estimatedFloors} (высота: ${height.toFixed(2)}, высота этажа: ${floorHeight}) 🦆`);
@@ -889,106 +1137,130 @@ function normalizeModelHeights() {
 // Загружает позиции, повороты и масштабы моделей из model_positions.json
 // Применяет сохраненные настройки к моделям после их загрузки
 
+async function detectDevApi() {
+  if (devApiDetectionPromise) {
+    return devApiDetectionPromise;
+  }
+
+  devApiDetectionPromise = (async () => {
+    try {
+      const response = await fetch(`${DEV_API_BASE}/status`);
+      if (!response.ok) {
+        devApiAvailable = false;
+        return false;
+      }
+      const status = await response.json();
+      devApiAvailable = !!status?.ok;
+      console.log(`✓ DEV API ${devApiAvailable ? "доступен" : "недоступен"}`);
+      return devApiAvailable;
+    } catch (_error) {
+      devApiAvailable = false;
+      return false;
+    }
+  })();
+
+  return devApiDetectionPromise;
+}
+
+function applyModelPositionData(modelKey, pos) {
+  if (!pos || !modelKey.startsWith("model")) return;
+
+  const modelIndex = parseInt(modelKey.replace("model", ""), 10) - 1;
+  if (modelIndex < 0 || modelIndex >= loadedModels.length) {
+    return;
+  }
+
+  const model = loadedModels[modelIndex];
+  if (!model) return;
+
+  // Применяем позиции
+  if (pos.offset) {
+    const x = pos.offset.x !== undefined ? pos.offset.x : modelOffsets[modelKey]?.x || 0;
+    const y = pos.offset.y !== undefined ? pos.offset.y : model.position.y;
+    const z = pos.offset.z !== undefined ? pos.offset.z : modelOffsets[modelKey]?.z || 0;
+    model.position.set(x, y, z);
+
+    if (!modelOffsets[modelKey]) modelOffsets[modelKey] = {};
+    modelOffsets[modelKey].x = x;
+    modelOffsets[modelKey].y = y;
+    modelOffsets[modelKey].z = z;
+  }
+
+  // Применяем поворот
+  if (pos.rotation && pos.rotation.yaw !== undefined) {
+    model.rotation.y = pos.rotation.yaw;
+    if (!modelRotations[modelKey]) modelRotations[modelKey] = {};
+    modelRotations[modelKey].yaw = pos.rotation.yaw;
+  }
+
+  // Применяем масштаб
+  if (!initialModelScales[modelKey]) {
+    initialModelScales[modelKey] = {
+      x: model.scale.x,
+      y: model.scale.y,
+      z: model.scale.z
+    };
+  }
+
+  const initialScale = initialModelScales[modelKey];
+  if (pos.scale) {
+    let scaleX = pos.scale.x !== undefined ? pos.scale.x : 1.0;
+    let scaleY = pos.scale.y !== undefined ? pos.scale.y : 1.0;
+    let scaleZ = pos.scale.z !== undefined ? pos.scale.z : 1.0;
+
+    if (scaleX > 10 || scaleY > 10 || scaleZ > 10) {
+      scaleX = scaleX / initialScale.x;
+      scaleY = scaleY / initialScale.y;
+      scaleZ = scaleZ / initialScale.z;
+    }
+
+    model.scale.set(
+      initialScale.x * scaleX,
+      initialScale.y * scaleY,
+      initialScale.z * scaleZ
+    );
+  }
+}
+
 async function loadModelPositions() {
   try {
-    const response = await fetch("model_positions.json");
-    if (!response.ok) {
-      console.log("Файл model_positions.json не найден, используются позиции по умолчанию");
-      // Применяем позиции по умолчанию
-      for (let i = 0; i < loadedModels.length; i++) {
-        const model = loadedModels[i];
-        if (!model) continue;
-        const modelKey = `model${i + 1}`;
-        model.position.x = modelOffsets[modelKey].x;
-        model.position.z = modelOffsets[modelKey].z;
-        model.rotation.y = modelRotations[modelKey].yaw;
+    await detectDevApi();
+
+    let positions = null;
+
+    if (devApiAvailable) {
+      const apiResponse = await fetch(`${DEV_API_BASE}/model_positions`);
+      if (apiResponse.ok) {
+        positions = await apiResponse.json();
+        if (positions && Object.keys(positions).length > 0) {
+          console.log("✓ Позиции загружены из DEV API");
+        }
       }
-      return;
     }
-    const positions = await response.json();
-    
+
+    if (!positions || Object.keys(positions).length === 0) {
+      const response = await fetch("model_positions.json");
+      if (!response.ok) {
+        console.log("Файл model_positions.json не найден, используются позиции по умолчанию");
+        for (let i = 0; i < loadedModels.length; i++) {
+          const model = loadedModels[i];
+          if (!model) continue;
+          const modelKey = `model${i + 1}`;
+          model.position.x = modelOffsets[modelKey].x;
+          model.position.z = modelOffsets[modelKey].z;
+          model.rotation.y = modelRotations[modelKey].yaw;
+        }
+        return;
+      }
+      positions = await response.json();
+      console.log("✓ Позиции загружены из model_positions.json");
+    }
+
     for (const modelKey in positions) {
-      // Пропускаем секцию "labels" и другие не-модели
       if (modelKey === "labels" || !modelKey.startsWith("model")) {
         continue;
       }
-      
-      if (positions[modelKey]) {
-        const pos = positions[modelKey];
-        const modelIndex = parseInt(modelKey.replace("model", "")) - 1;
-        
-        // Проверяем валидность индекса модели
-        if (modelIndex < 0 || modelIndex >= loadedModels.length) {
-          console.warn(`Неверный индекс модели для ${modelKey}: ${modelIndex}`);
-          continue;
-        }
-        
-        const model = loadedModels[modelIndex];
-        
-        if (!model) {
-          console.warn(`Модель ${modelKey} не найдена для применения позиции`);
-          continue;
-        }
-        
-        // Применяем позиции из JSON
-        if (pos.offset) {
-          const x = pos.offset.x !== undefined ? pos.offset.x : modelOffsets[modelKey]?.x || 0;
-          const y = pos.offset.y !== undefined ? pos.offset.y : model.position.y;
-          const z = pos.offset.z !== undefined ? pos.offset.z : modelOffsets[modelKey]?.z || 0;
-          
-          model.position.set(x, y, z);
-          
-          // Обновляем modelOffsets для синхронизации
-          if (!modelOffsets[modelKey]) modelOffsets[modelKey] = {};
-          modelOffsets[modelKey].x = x;
-          modelOffsets[modelKey].y = y;
-          modelOffsets[modelKey].z = z;
-        }
-        
-        // Применяем поворот из JSON
-        if (pos.rotation && pos.rotation.yaw !== undefined) {
-          model.rotation.y = pos.rotation.yaw;
-          
-          // Обновляем modelRotations для синхронизации
-          if (!modelRotations[modelKey]) modelRotations[modelKey] = {};
-          modelRotations[modelKey].yaw = pos.rotation.yaw;
-        }
-        
-        // Применяем масштаб из JSON
-        // Убеждаемся, что начальный масштаб сохранён (должен быть сохранён при загрузке модели)
-        if (!initialModelScales[modelKey]) {
-          // Если по какой-то причине не сохранён, сохраняем текущий
-          initialModelScales[modelKey] = {
-            x: model.scale.x,
-            y: model.scale.y,
-            z: model.scale.z
-          };
-        }
-        
-        const initialScale = initialModelScales[modelKey];
-        
-        if (pos.scale) {
-          // Значения из JSON интерпретируем как относительные множители (1.0 = 100%)
-          let scaleX = pos.scale.x !== undefined ? pos.scale.x : 1.0;
-          let scaleY = pos.scale.y !== undefined ? pos.scale.y : 1.0;
-          let scaleZ = pos.scale.z !== undefined ? pos.scale.z : 1.0;
-          
-          // Проверяем, не являются ли значения масштаба слишком большими
-          // Если масштаб больше 10, вероятно это абсолютное значение из старого формата
-          if (scaleX > 10 || scaleY > 10 || scaleZ > 10) {
-            // Конвертируем из старого формата (абсолютные значения) в новый (относительные)
-            scaleX = scaleX / initialScale.x;
-            scaleY = scaleY / initialScale.y;
-            scaleZ = scaleZ / initialScale.z;
-          }
-          
-          model.scale.set(
-            initialScale.x * scaleX,
-            initialScale.y * scaleY,
-            initialScale.z * scaleZ
-          );
-        }
-      }
+      applyModelPositionData(modelKey, positions[modelKey]);
     }
   } catch (error) {
     console.error("Ошибка загрузки позиций моделей:", error);
@@ -1590,6 +1862,99 @@ window.deleteLabelFromUI = function(labelId) {
 // ====================================================================================
 // Перемещение, поворот, масштабирование моделей через клавиатуру и UI
 // Режим позиционирования позволяет точно настраивать расположение корпусов
+function buildModelPayloadByIndex(modelIndex) {
+  const model = loadedModels[modelIndex];
+  if (!model) return null;
+  const modelKey = `model${modelIndex + 1}`;
+  const initialScale = initialModelScales[modelKey] || {
+    x: model.scale.x,
+    y: model.scale.y,
+    z: model.scale.z
+  };
+
+  return {
+    offset: {
+      x: model.position.x,
+      y: model.position.y,
+      z: model.position.z
+    },
+    rotation: {
+      yaw: model.rotation.y
+    },
+    scale: {
+      x: model.scale.x / initialScale.x,
+      y: model.scale.y / initialScale.y,
+      z: model.scale.z / initialScale.z
+    },
+    file: modelFiles[modelIndex] || `models/model${modelIndex + 1}.obj`,
+    clientId: DEV_CLIENT_ID
+  };
+}
+
+async function syncModelTransformToApi(modelIndex) {
+  if (!devApiAvailable || applyingRemoteUpdate) return;
+  const modelKey = `model${modelIndex + 1}`;
+  const payload = buildModelPayloadByIndex(modelIndex);
+  if (!payload) return;
+
+  try {
+    await fetch(`${DEV_API_BASE}/models/${modelKey}/transform`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    console.warn(`Не удалось синхронизировать ${modelKey} с API:`, error);
+  }
+}
+
+function scheduleModelTransformSync(modelIndex, delayMs = 250) {
+  if (modelIndex < 0) return;
+  const existingTimer = modelSyncTimers.get(modelIndex);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const timer = setTimeout(() => {
+    modelSyncTimers.delete(modelIndex);
+    syncModelTransformToApi(modelIndex);
+  }, delayMs);
+
+  modelSyncTimers.set(modelIndex, timer);
+}
+
+function connectDevEvents() {
+  if (!devApiAvailable || devEventSource) return;
+  try {
+    devEventSource = new EventSource(`${DEV_API_BASE}/events`);
+    devEventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.type !== "model_transform_updated") return;
+        if (payload?.clientId === DEV_CLIENT_ID) return;
+
+        const modelKey = payload.modelKey;
+        const pos = payload.data;
+        if (!modelKey || !pos) return;
+
+        applyingRemoteUpdate = true;
+        applyModelPositionData(modelKey, pos);
+      } catch (error) {
+        console.warn("Ошибка обработки realtime-события:", error);
+      } finally {
+        applyingRemoteUpdate = false;
+      }
+    };
+
+    devEventSource.onerror = () => {
+      // Позволяем EventSource автоматически переподключаться.
+    };
+    console.log("✓ Realtime подписка на DEV API активирована");
+  } catch (error) {
+    console.warn("Не удалось подключить realtime-подписку:", error);
+  }
+}
+
 function nudgeActiveModel(dx, dy, dz) {
   if (activeModel < 1 || activeModel > loadedModels.length) return;
   const model = loadedModels[activeModel - 1];
@@ -1606,6 +1971,7 @@ function nudgeActiveModel(dx, dy, dz) {
   
   // Обновляем метки модели при перемещении
   updateModelLabels(model);
+  scheduleModelTransformSync(activeModel - 1);
 }
 
 function rotateActiveModel(deltaYaw) {
@@ -1617,6 +1983,7 @@ function rotateActiveModel(deltaYaw) {
   
   const modelKey = `model${activeModel}`;
   modelRotations[modelKey].yaw = model.rotation.y;
+  scheduleModelTransformSync(activeModel - 1);
 }
 
 function scaleActiveModel(scaleFactor) {
@@ -1625,6 +1992,7 @@ function scaleActiveModel(scaleFactor) {
   if (!model) return;
   
   model.scale.multiplyScalar(scaleFactor);
+  scheduleModelTransformSync(activeModel - 1);
 }
 
 function updatePositionModeLabel() {
@@ -2020,6 +2388,9 @@ function applyModelScale(axis, scaleValue) {
   // Компенсируем смещение центра, чтобы модель оставалась на месте
   const offsetDiff = centerOffsetBefore.clone().sub(centerOffsetAfter);
   model.position.add(offsetDiff);
+
+  // Синхронизируем изменение масштаба в dev API
+  scheduleModelTransformSync(activeModel - 1);
 }
 
 // Ползунки масштабирования модели по осям
@@ -2104,6 +2475,9 @@ function animate() {
       window.updateModelRotation();
     }
   }
+  
+  // Обновляем позиции солнца и луны каждый кадр со сглаживанием
+  updateSunMoonPosition();
   
   // Обновляем контролы только если они включены
   if (controls && controls.enabled) {
@@ -2310,7 +2684,73 @@ function animate() {
         hudMenu.classList.toggle('expanded');
       });
     }
+    
+    // Инициализация утки со звуком
+    initDuckButton();
+
+    // Активируем realtime-синхронизацию в dev режиме
+    detectDevApi().then((enabled) => {
+      if (enabled) {
+        connectDevEvents();
+      }
+    });
   });
+  
+  /**
+   * Инициализирует кнопку утки со звуком "кря"
+   */
+  function initDuckButton() {
+    const duckButton = document.getElementById('duckButton');
+    if (!duckButton) return;
+    
+    duckButton.addEventListener('click', () => {
+      playQuackSound();
+    });
+    
+    console.log("✓ Утка инициализирована");
+  }
+  
+  /**
+   * Воспроизводит звук "кря" используя Web Audio API
+   */
+  function playQuackSound() {
+    try {
+      // Создаем контекст аудио (если еще не создан)
+      if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      const audioContext = window.audioContext;
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      // Настраиваем звук "кря" - комбинация частот для реалистичного звука
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+      oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.2);
+      
+      // Настраиваем громкость (envelope)
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.1, audioContext.currentTime + 0.1);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
+      
+      // Подключаем узлы
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Воспроизводим звук
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.25);
+      
+      console.log("🦆 Кря!");
+    } catch (error) {
+      console.warn("Не удалось воспроизвести звук утки:", error);
+      // Fallback: просто выводим в консоль
+      console.log("🦆 Кря!");
+    }
+  }
   
   // ====================================================================================
   // БЛОК 10: ОБРАБОТКА КЛАВИАТУРЫ

@@ -35,6 +35,7 @@ logs/
 *.tmp
 *.temp
 *.bak
+*.sqlite3
 
 # Archives (кроме нужных)
 *.rar

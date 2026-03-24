@@ -476,6 +476,7 @@ canvas {
   color: #eee;
   max-width: 400px;
   width: 90%;
+  position: relative;
 }
 
 .loading-spinner {
@@ -525,6 +526,44 @@ canvas {
   font-weight: 500;
 }
 
+/* Анимированная утка на экране загрузки */
+.duck-button {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  font-size: 60px;
+  cursor: pointer;
+  user-select: none;
+  animation: duckBounce 1s ease-in-out infinite;
+  transition: transform 0.1s ease;
+  z-index: 10001;
+  pointer-events: auto;
+}
+
+.duck-button:hover {
+  transform: scale(1.2);
+  animation-duration: 0.5s;
+}
+
+.duck-button:active {
+  transform: scale(0.9);
+}
+
+@keyframes duckBounce {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-10px) rotate(-5deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-10px) rotate(5deg);
+  }
+}
+
 /* Адаптивность для мобильных */
 @media screen and (max-width: 768px) {
   .loading-text {
@@ -539,6 +578,20 @@ canvas {
   
   .loading-status {
     font-size: 12px;
+  }
+  
+  .duck-button {
+    font-size: 50px;
+    bottom: 20px;
+    right: 20px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .duck-button {
+    font-size: 40px;
+    bottom: 15px;
+    right: 15px;
   }
 }
 
